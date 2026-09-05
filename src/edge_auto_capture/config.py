@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
-from infra import BASE_DIR, log, notify_fatal, resolve_writable_dir, set_log_dir
+from .infra import BASE_DIR, log, notify_fatal, resolve_writable_dir, set_log_dir
 
 # 設定ファイルのパス（基準フォルダ固定）。
 CONFIG_PATH = BASE_DIR / "config.ini"

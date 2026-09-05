@@ -16,9 +16,8 @@ from pathlib import Path
 
 import pytest
 
-import capture
-import infra
-from capture import (
+from edge_auto_capture import capture, infra
+from edge_auto_capture.capture import (
     INDEX_CSV_HEADER,
     CaptureRequest,
     CaptureRunner,
@@ -26,7 +25,7 @@ from capture import (
     safe_name,
     trigger_label,
 )
-from config import Config
+from edge_auto_capture.config import Config
 
 # --------------------------------------------------------------------------- #
 # safe_name

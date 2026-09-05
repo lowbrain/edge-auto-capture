@@ -58,16 +58,15 @@ from typing import Any, Optional
 
 from playwright.async_api import Page, async_playwright
 
-import badge
-import downloads
-from browser import browser_candidates, browser_launch_kwargs
-from capture import (
+from . import badge, downloads
+from .browser import browser_candidates, browser_launch_kwargs
+from .capture import (
     CaptureRequest,
     CaptureRunner,
     try_eval,
 )
-from config import Config, ConfigFatalError, load_config, should_capture, summarize_config
-from infra import (
+from .config import Config, ConfigFatalError, load_config, should_capture, summarize_config
+from .infra import (
     __version__,
     acquire_single_instance_lock,
     cleanup_old_profiles,
@@ -76,7 +75,7 @@ from infra import (
     open_in_file_manager,
     startup_environment_line,
 )
-from lineage import (
+from .lineage import (
     GroupState,
     LineageRegistry,
     group_folder_name,

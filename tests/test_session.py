@@ -1,4 +1,4 @@
-"""監視セッション（edge_auto_capture.CaptureSession）と起動シーケンスのユニットテスト。
+"""監視セッション（edge_auto_capture.app.CaptureSession）と起動シーケンスのユニットテスト。
 
 タブ系譜（グループ）の解決・記録状態のゲート・URL変化のイベント駆動（B-1）・操作バーへの
 状態配布（F-D2 / F-D3 / F-D4）・main() から切り出した起動シーケンスを、実 Edge 無しで
@@ -17,11 +17,9 @@ from pathlib import Path
 
 import pytest
 
-import badge
-import capture
-import infra
-from capture import CaptureRequest, CaptureRunner
-from config import Config, ConfigFatalError
+from edge_auto_capture import badge, capture, infra
+from edge_auto_capture.capture import CaptureRequest, CaptureRunner
+from edge_auto_capture.config import Config, ConfigFatalError
 
 # --------------------------------------------------------------------------- #
 # タブ系譜グループ（CaptureSession）
@@ -74,7 +72,7 @@ def _make_session(pages, roots=None, config=None):
     session.groups / session.page_root は読み取り専用ビューなので外から書けない）。
     runner は記録用スタブへ、refresh_panels は no-op へ差し替える。
     """
-    from edge_auto_capture import CaptureSession
+    from edge_auto_capture.app import CaptureSession
 
     session = CaptureSession(_FakeContext(pages), config or Config())
     session.runner = _RecRunner()
@@ -125,7 +123,7 @@ def test_setup_seeds_startup_pages_as_root_groups(recording):
     main() はこの種入れに全面的に依存する（自前で page_root/groups を触らない）ため、
     「setup() を通せば root 採番・start_recording 反映・監視配線が揃う」ことを固定する。
     """
-    from edge_auto_capture import CaptureSession
+    from edge_auto_capture.app import CaptureSession
 
     async def scenario():
         page = _SetupPage("startup")
@@ -150,7 +148,7 @@ def test_setup_without_pages_seeds_nothing():
     なく初期OFFの独立グループとして採番されうる。現在は main() が setup() の前に 1 枚用意し、
     種入れは setup() だけが行う。
     """
-    from edge_auto_capture import CaptureSession
+    from edge_auto_capture.app import CaptureSession
 
     async def scenario():
         ctx = _SetupContext([])
@@ -165,7 +163,7 @@ def test_setup_without_pages_seeds_nothing():
 
 def test_manual_tab_becomes_independent_off_group():
     # opener=None の手動タブは、それ自身が root の新グループ・初期OFFになる。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         root = _GroupPage("root")
@@ -183,7 +181,7 @@ def test_manual_tab_becomes_independent_off_group():
 
 def test_popup_joins_parent_group():
     # opener=root のポップアップは root と同じグループに合流し、状態を共有する。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         root = _GroupPage("root")
@@ -200,7 +198,7 @@ def test_popup_joins_parent_group():
 
 def test_grandchild_popup_resolves_to_root_group():
     # ポップアップのポップアップ（孫）も root グループへ合流する（推移性）。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         root = _GroupPage("root")
@@ -218,7 +216,7 @@ def test_grandchild_popup_resolves_to_root_group():
 
 def test_toggle_one_group_does_not_affect_another():
     # あるグループの記録ON/OFFは、無関係な別グループに波及しない。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         r1 = _GroupPage("r1")
@@ -241,7 +239,7 @@ def test_toggle_one_group_does_not_affect_another():
 
 def test_spa_changed_gated_by_group_state():
     # on_spa_changed はそのページのグループが on かつ spa_on のときだけ撮る。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         # on=True, spa_on=True → 撮る
@@ -267,7 +265,7 @@ def test_spa_changed_gated_by_group_state():
 
 def test_shoot_passes_group_id_to_spawn():
     # 撮影要求にはグループの id（作成時刻）が渡り、保存先フォルダ/ログで系譜を見分けられる。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         r = _GroupPage("r")
@@ -283,7 +281,7 @@ def test_shoot_passes_group_id_to_spawn():
 def test_shoot_skips_url_out_of_scope_and_does_not_spawn():
     # _shoot は should_capture で弾いた URL では None を返し、runner.spawn を呼ばない（#35）。
     # 判定ロジック自体は should_capture 側で厚く検証済み。ここは _shoot が結果を尊重する配線を守る。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     cfg = Config(skip_urls=("https://skip.test/",))
     s = _make_session([], config=cfg)
@@ -295,7 +293,7 @@ def test_shoot_skips_url_out_of_scope_and_does_not_spawn():
 
 def test_shoot_returns_none_when_url_unavailable():
     # pg.url の取得が失敗（ページが切断された等）したら、判定へ進まず None を返し spawn しない（#35）。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     class _UrlErrorPage:
         name = "boom"
@@ -313,7 +311,7 @@ def test_shoot_returns_none_when_url_unavailable():
 def test_refresh_panels_distributes_each_pages_own_group_state():
     # refresh_panels は開いている各ページへ、そのページが属するグループの状態を配る（#35）。
     # ページごとに状態が違うことを、2 グループのダブルで検証する。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     class _PanelPage:
         """opener() を持ちつつ、try_eval 経由で実行された JS を記録するページ代役。"""
@@ -355,7 +353,7 @@ def test_refresh_panels_distributes_each_pages_own_group_state():
 
 def test_open_folder_opens_session_output_dir(monkeypatch, tmp_path):
     # 押すと config.output_dir がそのまま opener へ渡る（記録状態やグループに依らない）。
-    import edge_auto_capture as eac
+    import edge_auto_capture.app as eac
 
     async def scenario():
         opened: list = []
@@ -370,7 +368,7 @@ def test_open_folder_opens_session_output_dir(monkeypatch, tmp_path):
 
 def test_open_folder_ignores_wrong_token(monkeypatch, tmp_path):
     # token 不一致（操作バー以外からの呼び出し）はフォルダを開かない。
-    import edge_auto_capture as eac
+    import edge_auto_capture.app as eac
 
     async def scenario():
         opened: list = []
@@ -410,7 +408,7 @@ def test_open_in_file_manager_invokes_platform_opener(monkeypatch, tmp_path):
 
 
 def test_remember_selector_dedup_recency_and_cap():
-    from edge_auto_capture import SELECTOR_HISTORY_MAX, CaptureSession
+    from edge_auto_capture.app import SELECTOR_HISTORY_MAX, CaptureSession
 
     s = CaptureSession(_FakeContext([]), Config())
 
@@ -440,7 +438,7 @@ def test_remember_selector_dedup_recency_and_cap():
 
 def test_commit_selector_records_history():
     # on_commit_selector が確定値を履歴へ積む（token 一致時のみ）。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         r = _GroupPage("r")
@@ -467,7 +465,7 @@ def test_commit_selector_records_history():
 def test_get_state_includes_selector_history():
     # get_state は履歴を同梱する（遷移後のバーが datalist 候補を失わない）。
     # token 不一致には履歴を漏らさない（利用者が入れた候補は返さない）。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         r = _GroupPage("r")
@@ -497,7 +495,7 @@ def test_trigger_threaded_per_path():
     # 撮影契機が投入元 3 経路から CaptureRequest.trigger に載る（F-A1）:
     # on_shot="manual" / on_spa_changed="spa" / _shoot_if_changed="url" /
     # 記録開始(on_toggle)の即撮り="url"。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         # 今すぐ1枚 → manual（記録状態に関わらず撮る）
@@ -538,7 +536,7 @@ def test_trigger_threaded_per_path():
 def test_shoot_if_changed_only_on_real_url_change():
     # 記録ONのページは、URLが前回と変わったときだけ撮る。ハッシュのみの変化・
     # 同一URL・skip_urls・記録OFF では撮らない。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         r = _GroupPage("r", url="https://example.test/a")
@@ -566,7 +564,7 @@ def test_shoot_if_changed_only_on_real_url_change():
 
 
 def test_shoot_if_changed_gated_by_recording_and_skip_urls():
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         # 記録OFF → 撮らず seen も更新しない（ON にした瞬間の即撮りに委ねる）。
@@ -590,7 +588,7 @@ def test_shoot_if_changed_gated_by_recording_and_skip_urls():
 
 def test_on_navigated_ignores_subframe_navigations():
     # 子フレーム（iframe 等）の遷移では撮らない。メインフレームの遷移だけ拾う。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         r = _GroupPage("r", url="https://example.test/a")
@@ -609,7 +607,7 @@ def test_on_navigated_ignores_subframe_navigations():
 def test_on_page_closed_prunes_state_and_gcs_group():
     # 閉じたページは seen / page_root / _tracked から消え、どの生存ページからも
     # 参照されなくなった root のグループも捨てられる。ポップアップが残る間は保持する。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         root = _GroupPage("root")
@@ -642,7 +640,7 @@ def test_on_page_closed_prunes_state_and_gcs_group():
 
 def test_get_state_returns_group_state():
     # get_state は問い合わせ元ページのグループの状態を返す（token 一致時）。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         r = _GroupPage("r")
@@ -663,7 +661,7 @@ def test_get_state_returns_group_state():
 
 def test_prune_drops_group_when_all_pages_closed():
     # ページが全て閉じたグループは、状態が捨てられる（root が閉じても系譜が残れば保持）。
-    from edge_auto_capture import GroupState
+    from edge_auto_capture.app import GroupState
 
     async def scenario():
         root = _GroupPage("root")
@@ -755,7 +753,7 @@ class _EvalPage:
 
 def test_session_wires_runner_on_result():
     # CaptureSession は runner の成否通知を自分のカウンタ更新へ配線する（F-D3）。
-    from edge_auto_capture import CaptureSession
+    from edge_auto_capture.app import CaptureSession
 
     session = CaptureSession(_FakeContext([]), Config())
     assert session.runner.on_result == session._on_capture_result
@@ -764,7 +762,7 @@ def test_session_wires_runner_on_result():
 
 def test_on_capture_result_counts_only_success_and_pushes():
     # ok=True のときだけ枚数を増やし、その値を全ページの操作バーへ配る。ok=False は数えない。
-    from edge_auto_capture import CaptureSession
+    from edge_auto_capture.app import CaptureSession
 
     async def scenario():
         p1, p2 = _EvalPage("1"), _EvalPage("2")
@@ -791,7 +789,7 @@ def test_on_capture_result_counts_only_success_and_pushes():
 def test_get_state_reports_current_shot_count():
     # get_state は現在の撮影カウンタを count で返す（再描画されたバーの枚数復元用）。
     # 記録状態を伏せる token 不一致の応答にも count は載る（枚数は秘匿情報ではない）。
-    from edge_auto_capture import CaptureSession
+    from edge_auto_capture.app import CaptureSession
 
     async def scenario():
         session = CaptureSession(_FakeContext([]), Config())
@@ -911,7 +909,7 @@ def test_capture_skips_settle_sleep_only_for_spa(tmp_path, monkeypatch, trigger,
 
 
 def test_prepare_output_dir_creates_and_reports_success(tmp_path):
-    import edge_auto_capture as eac
+    import edge_auto_capture.app as eac
 
     out = tmp_path / "session"
     assert eac._prepare_output_dir(Config(output_dir=out)) is True
@@ -920,7 +918,7 @@ def test_prepare_output_dir_creates_and_reports_success(tmp_path):
 
 def test_prepare_output_dir_notifies_and_fails_when_unwritable(monkeypatch, tmp_path):
     # 作れないときは無言終了せず通知し、False で呼び出し側に中断させる。
-    import edge_auto_capture as eac
+    import edge_auto_capture.app as eac
 
     said: list[str] = []
     monkeypatch.setattr(eac, "notify_fatal", lambda msg: said.append(msg))
@@ -935,7 +933,7 @@ def test_prepare_output_dir_notifies_and_fails_when_unwritable(monkeypatch, tmp_
 
 def test_prepare_profile_dir_reuses_configured_dir(monkeypatch, tmp_path):
     # profile_dir 指定時は「そのフォルダ・使い捨てでない」。掃除は keep 付きで呼ぶ。
-    import edge_auto_capture as eac
+    import edge_auto_capture.app as eac
 
     kept: list = []
     monkeypatch.setattr(eac, "cleanup_old_profiles", lambda **kw: kept.append(kw.get("keep")))
@@ -950,7 +948,7 @@ def test_prepare_profile_dir_reuses_configured_dir(monkeypatch, tmp_path):
 
 def test_prepare_profile_dir_makes_ephemeral_when_unset(monkeypatch):
     # 未指定なら使い捨ての一時プロファイル。掃除は除外指定なしで呼ぶ。
-    import edge_auto_capture as eac
+    import edge_auto_capture.app as eac
 
     calls: list = []
     monkeypatch.setattr(eac, "cleanup_old_profiles", lambda **kw: calls.append(kw))
@@ -989,7 +987,7 @@ class _FakePlaywright:
 
 def test_launch_browser_falls_back_to_next_candidate():
     # 既定（browser 未指定）は Edge→Chrome。Edge が起動できなければ Chrome へ回る。
-    import edge_auto_capture as eac
+    import edge_auto_capture.app as eac
 
     async def scenario():
         chromium = _FakeChromium(fail_first=1)
@@ -1003,7 +1001,7 @@ def test_launch_browser_falls_back_to_next_candidate():
 
 def test_launch_browser_returns_none_and_notifies_when_all_fail(monkeypatch):
     # 全候補が失敗したら None を返し、試した順と理由を添えて通知する（無言終了にしない）。
-    import edge_auto_capture as eac
+    import edge_auto_capture.app as eac
 
     said: list[str] = []
     monkeypatch.setattr(eac, "notify_fatal", lambda msg: said.append(msg))
@@ -1051,7 +1049,7 @@ class _CliStubs:
         self.interrupt = False                 # run で KeyboardInterrupt を起こすか
 
     def install(self, monkeypatch):
-        import edge_auto_capture as eac
+        import edge_auto_capture.app as eac
 
         def load_config():
             # このスタブが呼ばれた時点までのログ本数を控える（順序依存の検証用）。

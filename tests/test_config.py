@@ -14,11 +14,9 @@ from pathlib import Path
 
 import pytest
 
-import capture
-import config as config_mod
-import infra
-import lineage
-from config import Config, ConfigFatalError, load_config, should_capture
+from edge_auto_capture import capture, infra, lineage
+from edge_auto_capture import config as config_mod
+from edge_auto_capture.config import Config, ConfigFatalError, load_config, should_capture
 
 # session_stamp の実装本体への参照（conftest の autouse フィクスチャが "" へ差し替える前に押さえる）。
 # 差し替え後も本物の書式を検証できるようにするため（F-C3）。
@@ -491,7 +489,7 @@ output_dir = {out}
         session / "lineage-20260811143025000"
     )
     # ダウンロード退避先（downloads._downloads_dir）もセッションフォルダ配下。
-    from downloads import _downloads_dir
+    from edge_auto_capture.downloads import _downloads_dir
 
     assert _downloads_dir(c, "20260811143025000") == (
         session / "lineage-20260811143025000" / "downloads"
@@ -506,7 +504,7 @@ output_dir = {out}
 
 
 def test_summarize_config_reports_key_values():
-    from config import summarize_config
+    from edge_auto_capture.config import summarize_config
 
     c = Config(
         browser="edge",
@@ -525,7 +523,7 @@ def test_summarize_config_reports_key_values():
 
 
 def test_summarize_config_marks_empty_values_readably():
-    from config import summarize_config
+    from edge_auto_capture.config import summarize_config
 
     line = summarize_config(Config())  # 既定（自動選択・使い捨て・セレクタ無し）
     assert "browser=自動(Edge→Chrome)" in line

@@ -11,8 +11,8 @@ import asyncio
 
 import pytest
 
-from config import Config
-from edge_auto_capture import CaptureSession, GroupState, _url_key
+from edge_auto_capture.app import CaptureSession, GroupState, _url_key
+from edge_auto_capture.config import Config
 
 
 def _session() -> CaptureSession:

@@ -10,9 +10,9 @@ browser 側の定義表 BROWSER_BY_KEY が暗黙に一致している前提を�
     pytest
 """
 
-import config as config_mod
-from browser import AUTO_BROWSER_ORDER, BROWSER_BY_KEY, browser_candidates
-from config import Config
+from edge_auto_capture import config as config_mod
+from edge_auto_capture.browser import AUTO_BROWSER_ORDER, BROWSER_BY_KEY, browser_candidates
+from edge_auto_capture.config import Config
 
 # --------------------------------------------------------------------------- #
 # browser_candidates: config.browser 指定あり（フォールバックしない）

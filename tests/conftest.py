@@ -1,8 +1,8 @@
 """pytest 共通設定。
 
-プロジェクト直下（このファイルの親の親）を import パスへ入れ、
-tests/ からトップレベルモジュール（infra / config / capture / badge / edge_auto_capture）を
-そのまま import できるようにする。
+パッケージ化（src/ レイアウト、#81）以降は `pip install -e ".[dev]"` で
+edge_auto_capture がインストール済み前提になるため、sys.path への挿入は不要。
+tests/ からは `from edge_auto_capture import infra` のように絶対 import する。
 
 あわせて、テスト全体に効く安全弁（ダイアログを出さない・ログを一時フォルダへ逃がす・
 session_stamp を固定する）を autouse フィクスチャで張る。以前は test_capture.py の中だけに
@@ -10,15 +10,10 @@ session_stamp を固定する）を autouse フィクスチャで張る。以前
 ここへ移して 1 か所で持ち、tests/ 配下すべてに同じ前提を効かせる。
 """
 
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-import config as config_mod  # noqa: E402  （上の sys.path 挿入より後でないと import できない）
-import infra  # noqa: E402
+from edge_auto_capture import config as config_mod
+from edge_auto_capture import infra
 
 
 @pytest.fixture(autouse=True)

@@ -21,7 +21,7 @@ CONTRIBUTING §1-5 が「バインディング名は 2 箇所に存在し、片�
 
 import re
 
-import badge
+from edge_auto_capture import badge
 
 # --------------------------------------------------------------------------- #
 # badge.js の読み出し（場所の解決は badge.py 自身に任せる）

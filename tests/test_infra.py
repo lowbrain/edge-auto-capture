@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-import infra
+from edge_auto_capture import infra
 
 # --------------------------------------------------------------------------- #
 # バージョン（D-B1: 出所を infra.__version__ に一本化する）
@@ -32,7 +32,7 @@ def test_pyproject_sources_version_from_infra():
     root = Path(__file__).resolve().parent.parent
     text = (root / "pyproject.toml").read_text(encoding="utf-8")
     assert re.search(r'dynamic\s*=\s*\[\s*"version"\s*\]', text)
-    assert re.search(r'attr\s*=\s*"infra\.__version__"', text)
+    assert re.search(r'attr\s*=\s*"edge_auto_capture\.infra\.__version__"', text)
     # バージョンの直書き行（version = "x.y.z"）が残っていないこと。
     assert not re.search(r'^\s*version\s*=\s*"', text, re.MULTILINE)
 
