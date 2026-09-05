@@ -38,6 +38,28 @@ def test_pyproject_sources_version_from_infra():
 
 
 # --------------------------------------------------------------------------- #
+# _base_dir（#81: config.ini / output の基準フォルダの解決）
+# --------------------------------------------------------------------------- #
+
+
+def test_base_dir_non_frozen_returns_cwd(monkeypatch, tmp_path):
+    # 通常の Python 実行（sys.frozen 無し）ではカレントディレクトリを返す。
+    # パッケージ化（src/ レイアウト）後も __file__ 側（パッケージフォルダ）に
+    # 引きずられず、`pip install` したコマンドを実行した場所を基準にするため。
+    monkeypatch.setattr(infra.sys, "frozen", False, raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert infra._base_dir() == tmp_path
+
+
+def test_base_dir_frozen_returns_executable_parent(monkeypatch, tmp_path):
+    # PyInstaller で exe 化した場合は exe のあるフォルダ（sys.executable の親）。
+    monkeypatch.setattr(infra.sys, "frozen", True, raising=False)
+    fake_exe = tmp_path / "edge-auto-capture.exe"
+    monkeypatch.setattr(infra.sys, "executable", str(fake_exe), raising=False)
+    assert infra._base_dir() == tmp_path
+
+
+# --------------------------------------------------------------------------- #
 # 環境情報の起動ログ（D-B2: 切り分けのため OS/採用設定値を1行ずつ残す）
 # --------------------------------------------------------------------------- #
 

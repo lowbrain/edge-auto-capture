@@ -29,13 +29,19 @@ def _base_dir() -> Path:
     """設定・保存先の基準フォルダを返す。
 
     PyInstaller で exe 化した場合（sys.frozen）は exe のあるフォルダ、
-    通常の Python 実行時はこのスクリプトのあるフォルダを基準にする。
+    通常の Python 実行時はカレントディレクトリを基準にする。
     これにより、配布した exe の隣に置いた config.ini を読み、
     output\\ も exe の隣に作れる（＝第三者が config.ini を編集できる）。
+
+    非 frozen 側は以前 `Path(__file__).parent`（このモジュールのあるフォルダ）を
+    使っていたが、パッケージ化（`src/` レイアウト）すると `__file__` はパッケージ
+    フォルダの中を指してしまい、`config.ini` の読み場所が変わってしまう。`pip install`
+    したコマンドはインストール先ではなく実行時のカレントディレクトリを基準に
+    `config.ini` / `output/` を解決すべきなので cwd にする（#81）。
     """
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
-    return Path(__file__).parent
+    return Path.cwd()
 
 
 # 設定・出力の基準フォルダ（通常実行なら本ファイル、exe 実行なら exe と同じ場所）。
