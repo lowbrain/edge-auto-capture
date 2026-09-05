@@ -87,22 +87,27 @@ Edge 実機で確認した挙動（Edge 152 / `E-5`）。クラッシュはせ�
 
 ## リポジトリ構成
 
-役割ごとに分割している。依存方向は下向きの一方向で循環なし:
-`edge_auto_capture →（capture / config / badge）→ infra`、`capture → badge`、`config → infra`。
+`src/` レイアウトのパッケージ（`edge_auto_capture`）。役割ごとに分割している。
+依存方向は下向きの一方向で循環なし:
+`app →（capture / config / badge）→ infra`、`capture → badge`、`config → infra`。
 `infra` は Playwright 非依存で、`config`（設定読み込み）も同様なので実 Edge 無しでテストできる。
 ページ側 JS は実ファイル `badge.js` に置き、エディタ/リンタで構文検査できるようにしてある。
 
 ```
 edge-auto-capture/
-├─ edge_auto_capture.py   エントリ＋監視セッション（CaptureSession）
-├─ capture.py             1ページ分の保存処理（撮影実行器 CaptureRunner）・ページ操作ヘルパ
-├─ config.py              設定（Config / config.ini の load_config）
-├─ infra.py               基盤ユーティリティ（パス・ログ・致命エラー通知・一時プロファイル掃除）
-├─ lineage.py             タブ系譜（lineage）の識別・保存先規約と解決レジストリ
-├─ browser.py             Edge/Chrome の起動候補と起動オプションの組み立て
-├─ badge.py               操作バーのページ側JS組み立て（表示文言→$CONFIG／バインディング名）
-├─ badge.js               操作バーのページ側JS本体（実ファイル）
-├─ downloads.py           ダウンロードの保存先解決とファイル退避（E-4）
+├─ src/
+│  └─ edge_auto_capture/
+│     ├─ __init__.py      __version__ の再エクスポートのみ（重い import を置かない）
+│     ├─ __main__.py      python -m edge_auto_capture の入口（cli() を呼ぶだけ）
+│     ├─ app.py           エントリ＋監視セッション（CaptureSession・cli()）
+│     ├─ capture.py       1ページ分の保存処理（撮影実行器 CaptureRunner）・ページ操作ヘルパ
+│     ├─ config.py        設定（Config / config.ini の load_config）
+│     ├─ infra.py         基盤ユーティリティ（パス・ログ・致命エラー通知・一時プロファイル掃除）
+│     ├─ lineage.py       タブ系譜（lineage）の識別・保存先規約と解決レジストリ
+│     ├─ browser.py       Edge/Chrome の起動候補と起動オプションの組み立て
+│     ├─ badge.py         操作バーのページ側JS組み立て（表示文言→$CONFIG／バインディング名）
+│     ├─ badge.js         操作バーのページ側JS本体（実ファイル・package-data）
+│     └─ downloads.py     ダウンロードの保存先解決とファイル退避（E-4）
 ├─ tests/                 テストと conftest.py（構成は下の「テスト」節）
 ├─ .github/workflows/ci.yml  CI（ruff+mypy / pytest / smoke --strict）
 ├─ config.ini             既定の設定ファイル
@@ -114,17 +119,22 @@ edge-auto-capture/
 └─ build.ps1              配布用 exe のビルド（PyInstaller）
 ```
 
-生成物（`build/` `dist/` `output/` `__pycache__/` `*.spec`）は Git 管理外。
+`config.ini` / `USAGE.txt` / `build.ps1` は配布素材・スクリプトなのでルート据え置き
+（`src/` へは入れない）。生成物（`build/` `dist/` `output/` `__pycache__/` `*.spec`・
+`src/edge_auto_capture.egg-info/`）は Git 管理外。
 
 ## 開発時の実行
 
 ```bash
 pip install -e .
-python edge_auto_capture.py
+python -m edge_auto_capture
 ```
 
-挙動は同じフォルダの `config.ini` で設定する（下表）。実際の操作方法は `USAGE.txt` を参照。
-停止は Ctrl+C かブラウザのウィンドウを閉じる。
+`src/` レイアウト化（#81）により `python edge_auto_capture.py` は使えなくなった。
+`pip install -e .` 済みなら `edge-auto-capture` コマンドでも同じものが起動する。
+
+挙動は実行時のカレントディレクトリの `config.ini` で設定する（下表）。
+実際の操作方法は `USAGE.txt` を参照。停止は Ctrl+C かブラウザのウィンドウを閉じる。
 
 ### 設定（config.ini）
 
