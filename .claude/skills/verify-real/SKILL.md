@@ -1,6 +1,6 @@
 ---
 name: verify-real
-description: Windows + 実 Edge の実機で、自動4点セット（/verify）では守れない領域（入口とダイアログ・D-C3自己修復・D-C1退避・機能の目視・配布exe）を段階的に確認し、Issue #78「検証状況」節を更新する文面を作る。「実機検証して」「Windowsで動作確認して」「exeビルドして試して」「#78の検証状況を更新して」で使う。macOS開発機では実行できない（Windows + 実Edge専用）。
+description: Windows + 実 Edge の実機で、自動4点セット（/verify）では守れない領域（入口とダイアログ・D-C3自己修復・D-C1退避・機能の目視・pip install .の実機経路・配布exe）を段階的に確認し、Issue #78「検証状況」節を更新する文面を作る。「実機検証して」「Windowsで動作確認して」「exeビルドして試して」「pip installを試して」「#78の検証状況を更新して」で使う。macOS開発機では実行できない（Windows + 実Edge専用）。
 ---
 
 # Windows 実機検証
@@ -82,16 +82,41 @@ POSIX chmod の効かなさゆえ self-skip するのが期待値 — CONTRIBUTI
 
 ## 5. 段階 5: 配布物
 
+配布経路は 2 つあり、**どちらも別物として両方確認する**。片方が通ってももう片方の保証にはならない。
+
+### 5a. `pip install .`（非 editable）— #81 が報告した経路そのもの
+
+```powershell
+python -m venv .verify-venv
+.verify-venv\Scripts\activate
+pip install .
+edge-auto-capture
+```
+
+- `pip install -e .`（開発時）ではなく、**非 editable の `pip install .`** であること。
+  #81 のバグ（`badge.js` が wheel に入らず `FileNotFoundError`）は非 editable でしか再現しない
+- `pip` が `Scripts\` 配下に生成する `edge-auto-capture.exe` ランチャーから
+  `edge_auto_capture.app:cli` が実際に起動できること。macOS 側の検証は
+  `pip wheel` で作った wheel の中身を調べ `--target` インストールで再現しただけで、
+  **Windows の実ファイルシステム・pip 生成ランチャーは通していない**。ここが唯一の実地確認
+- 確認が終わったら `.verify-venv` は消してよい（検証用の使い捨て）
+
+### 5b. `build.ps1` → exe（配布用ビルド）
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
 - exe ビルドが成功し `dist\edge-auto-capture\` が生成されること
 - `dist\edge-auto-capture\edge-auto-capture.exe` を実行し、操作バーが出ること
-  （#81 の受入基準そのもの — `src/` レイアウト化後にここが初めて実機で確認される）
+  （#81 の受入基準そのもの）
 - `config.ini` を壊すなどして意図的に失敗させ、`--noconsole` ビルドが**無言死しない**こと
   （メッセージボックスが出ること）。コンソールが無いので、ここで失敗すると
   「ダブルクリックしても何も起きない」に見える一番危険なパターン
+- **`__main__.py` は `python -m edge_auto_capture` 用に絶対 import で書いてあるが、
+  PyInstaller が実際にこれを問題なく凍結できるかは、5b を実行して初めて分かる。**
+  ここで失敗した場合は `src/edge_auto_capture/__main__.py` の import か
+  `build.ps1` の `--add-data` パスを疑う
 
 ---
 
@@ -108,7 +133,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - 段階2（入口とダイアログ）: <確認できたこと>
 - 段階3（壊れ方）: <確認できたこと>
 - 段階4（機能の目視）: <確認できたこと>
-- 段階5（配布物）: <確認できたこと>
+- 段階5a（pip install . の実機経路）: <確認できたこと>
+- 段階5b（build.ps1 → exe）: <確認できたこと>
 
 ## 未検証
 - <段階のうち回せなかったもの・理由>
@@ -119,7 +145,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 ### 書いてはいけないこと
 
-- 段階1（4点セット）だけ回して「実機検証しました」と書く。段階2〜5こそこのスキルの主眼
+- 段階1（4点セット）だけ回して「実機検証しました」と書く。段階2〜5（5a/5b含む）こそこのスキルの主眼
 - Chrome フォールバックの smoke PASS を「実 Edge で確認した」と書く
 - 途中で止めたのに段階5まで「検証済み」に含める
 
@@ -149,3 +175,26 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - **段階を飛ばして進めない。** 段階2〜5 はどれも「4点セットでは守られない」ことを前提に
   設計されている（CONTRIBUTING §3 の表）。時間が無い場合は「どこまでやったか」を
   正直に報告フォーマットの「未検証」へ書く
+
+## このスキルでも救えないもの
+
+段階1〜5（+5a/5b）を全部通しても、次は対象外。**「実機検証しました」と書くときも、
+これらが検証されたことにはならない**と分かって書くこと。
+
+- **アンチウイルス/SmartScreen の誤検知（`D-D2`）** — #78 で「運用事項」（技術対応の
+  スコープ外）と位置づけ済み。`--onedir` で緩和はしているが、出たら都度対応であって、
+  ここで PASS/FAIL を判定する項目ではない
+- **企業のグループポリシー（AppLocker / WDAC）でのブロック** — 未署名 exe は
+  「詳細情報 → 実行」でも回避できずブロックされる環境がある（README 参照）。
+  検証機がそうした制限下に無ければ再現・確認しようがない
+- **非管理者アカウント・OneDrive/ネットワークドライブを `output_dir` にした場合の
+  ファイルロック競合・同期タイミング問題**
+- **英語ロケール Windows コンソールでの `log()` の表示欠落** — `tests/smoke_badge.py`
+  は `sys.stdout.reconfigure(encoding="utf-8")` 済み（#3）だが、`app.py` /
+  `__main__.py` 側には同じ対策が無い。`log()` は `except Exception: pass` で
+  握り潰す設計なのでクラッシュはしないが、日本語ログがコンソールに出ない可能性がある
+  （`log.txt` 自体は `encoding="utf-8"` 指定で正しく書かれる）。配布対象が
+  日本語話者に限られる前提（`F-D5` 見送りの理由と同じ）なので優先度は低いが、
+  踏んだ場合はここが原因だと分かるように書いておく
+- **長時間稼働・スリープ復帰** — 数時間単位の連続記録、PC のスリープ/復帰をまたいだ
+  Edge との接続維持は、このスキルの手順では確認できない
