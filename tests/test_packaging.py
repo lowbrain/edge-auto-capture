@@ -4,7 +4,7 @@
 種類の不変条件をここへ集める。開発中は pip install -e . で動いてしまうため、
 気づくのが配布 exe を作った後（しかも --noconsole なら無言死）になる。
 
-- pyproject.toml の [tool.setuptools] py-modules と、リポジトリ直下の実ファイルの一致（#68）
+- badge.js が package-data として宣言され、実在すること（#68・#81）
 - USAGE.txt が Shift-JIS として健全であること（#69）
 
 どちらも標準ライブラリだけで完結させる。CI は 3.9 と 3.12 の両方で pytest を回すので、
@@ -21,38 +21,27 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 # --------------------------------------------------------------------------- #
-# py-modules と実ファイルの一致（#68・CONTRIBUTING §1-10）
+# badge.js の同梱（#68・#81）
 # --------------------------------------------------------------------------- #
+# py-modules（トップレベル・モジュール群）時代は package-data が使えず、
+# pip install .（非 editable）で badge.js が wheel に入らず起動不能になっていた
+# （#81・src/ レイアウト化で根治）。ここでは「宣言されていること」と「実在すること」の
+# 2 本で縛る。wheel を実ビルドして中身を見る形の方が強いが、CI の 3.9/3.12 マトリクスで
+# 毎回回すには重いので、まずは宣言テストから始める。
 
 
-def _declared_py_modules() -> set:
-    """pyproject.toml の [tool.setuptools] py-modules に並ぶモジュール名。"""
+def test_badge_js_is_declared_as_package_data():
     src = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    m = re.search(r"^py-modules\s*=\s*\[([^\]]*)\]", src, re.MULTILINE)
-    assert m, "pyproject.toml に py-modules の配列が見つからない（書き方を変えたらこの抽出も直す）"
-    return set(re.findall(r'"([^"]+)"', m.group(1)))
+    m = re.search(r"^\[tool\.setuptools\.package-data\]\s*$(.*?)^\[", src, re.MULTILINE | re.DOTALL)
+    assert m, "pyproject.toml に [tool.setuptools.package-data] セクションが見つからない"
+    assert re.search(r'edge_auto_capture\s*=\s*\[[^\]]*"badge\.js"', m.group(1))
 
 
-def _actual_top_level_modules() -> set:
-    """リポジトリ直下に実在するトップレベル・モジュール名。
-
-    tests/ は直下ではないので自然に外れる。build / dist / output などの生成物も
-    ディレクトリなので glob("*.py") には掛からない。
-    """
-    return {p.stem for p in ROOT.glob("*.py")}
-
-
-def test_py_modules_matches_actual_files():
-    # 手で追記が要るのはここ 1 箇所だけ（§1-10）。漏れると配布が黙って割れるのに、
-    # 開発中は pip install -e . で動くため 4 点セットのどれも落ちない。
-    # [tool.mypy] は files = ["."] + exclude 方式なので追記不要（#40 の再発防止）。
-    # 逆向き（消したモジュールが py-modules に残る）も同時に縛るため集合比較にする。
-    assert _declared_py_modules() == _actual_top_level_modules()
-
-
-def test_declared_py_modules_are_not_empty():
-    # 抽出が壊れて両方空になると上の比較が素通りするので、非空も見る。
-    assert _declared_py_modules()
+def test_badge_js_exists_next_to_badge_py():
+    # badge.py の _badge_js_path() は Path(__file__).parent / "badge.js" を見る前提。
+    package_dir = ROOT / "src" / "edge_auto_capture"
+    assert (package_dir / "badge.py").is_file()
+    assert (package_dir / "badge.js").is_file()
 
 
 # --------------------------------------------------------------------------- #
