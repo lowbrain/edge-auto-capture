@@ -165,6 +165,25 @@ class CaptureSession:
     def page_root(self) -> Mapping[Page, Page]:
         return MappingProxyType(self._lineage.page_root)
 
+    # ページ側 → Python のバインディング名（badge.BIND_*）と、それを受けるメソッド名の対応表。
+    # setup() はこれを回して expose_binding するだけなので、バインディングを増やすときに
+    # 触るのはこの表の 1 行だけになる（以前は setup() 内に 8 行が直書きで並んでいた）。
+    # badge.py の BIND_*（＝badge.js の BINDING_NAMES）と 1:1 で揃っていること。1 行落とすと
+    # ページ側は callBinding が BOUND から引けず undefined を返して終わり、例外もログも出ずに
+    # ボタンだけが効かなくなる（CONTRIBUTING §1-5）。
+    # tests/test_badge.py の test_setup_exposes_exactly_the_declared_bindings が、この表では
+    # なく setup() の実挙動（何が公開されたか）を見て過不足を落とす。
+    _BINDINGS = (
+        (badge.BIND_TOGGLE, "on_toggle"),
+        (badge.BIND_SHOT, "on_shot"),
+        (badge.BIND_OPEN_FOLDER, "on_open_folder"),
+        (badge.BIND_SPA_TOGGLE, "on_spa_toggle"),
+        (badge.BIND_SET_SELECTOR, "on_set_selector"),
+        (badge.BIND_COMMIT_SELECTOR, "on_commit_selector"),
+        (badge.BIND_SPA_CHANGED, "on_spa_changed"),
+        (badge.BIND_GETSTATE, "get_state"),
+    )
+
     # ---- ページ側とのやり取り ----
 
     async def refresh_panels(self) -> None:
@@ -461,14 +480,9 @@ class CaptureSession:
             )
             self._track_page(pg)
         # バインディング名は badge.py の BIND_* に集約（badge.js 側の呼び出し名と一致）。
-        await self.context.expose_binding(badge.BIND_TOGGLE, self.on_toggle)
-        await self.context.expose_binding(badge.BIND_SHOT, self.on_shot)
-        await self.context.expose_binding(badge.BIND_OPEN_FOLDER, self.on_open_folder)
-        await self.context.expose_binding(badge.BIND_SPA_TOGGLE, self.on_spa_toggle)
-        await self.context.expose_binding(badge.BIND_SET_SELECTOR, self.on_set_selector)
-        await self.context.expose_binding(badge.BIND_COMMIT_SELECTOR, self.on_commit_selector)
-        await self.context.expose_binding(badge.BIND_SPA_CHANGED, self.on_spa_changed)
-        await self.context.expose_binding(badge.BIND_GETSTATE, self.get_state)
+        # 名前とメソッドの対応は _BINDINGS（上のクラス定数）が持ち、ここは回すだけにする。
+        for name, method in self._BINDINGS:
+            await self.context.expose_binding(name, getattr(self, method))
         # badge.js には今回の合言葉（token）と SPA検知のデバウンス時間（settle_delay をミリ秒へ）を
         # 埋め込む。token は各バインディング呼び出しの照合、settle は落ち着き判定に使う。
         settle_ms = int(self.config.settle_delay * 1000)
