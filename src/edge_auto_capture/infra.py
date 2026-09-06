@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-# バージョンの単一の出所（D-B1）。pyproject.toml は
+# バージョンの単一の出所。pyproject.toml は
 # [tool.setuptools.dynamic] version = {attr = "infra.__version__"} でここを参照する。
 # infra は依存の最下層（Playwright 非依存）なので循環せず、exe / ログ / UI から参照できる。
 __version__ = "0.1.0"
@@ -59,7 +59,7 @@ def resolve_writable_dir(preferred: Path) -> Optional[Path]:
     第三者が exe を C:\\Program Files\\ など書き込み権限の無い場所へ展開した場合、
     preferred（＝設定された output_dir）への mkdir / 書き込みが PermissionError で
     失敗する。--noconsole ビルドでは stderr も見えず「ダブルクリックしても何も
-    起きない」状態になる（D-C1）。それを避けるため、preferred が駄目なら
+    起きない」状態になる。それを避けるため、preferred が駄目なら
     %LOCALAPPDATA%（無ければ一時フォルダ）配下へ退避して動き続けられるようにする。
 
     実際に mkdir して小さなファイルを書ける（そして消せる）ことまで確認した候補だけを
@@ -124,7 +124,7 @@ def log(msg: str) -> None:
 
     windowed exe（コンソール無し）では sys.stdout が None になり得るため、
     print は失敗しても無視する。ファイルへの記録を主とする。
-    時刻は ISO 8601 オフセット付き（F-A4）。索引 CSV と時刻表記をそろえ、後から突き合わせられる。
+    時刻は ISO 8601 オフセット付き。索引 CSV と時刻表記をそろえ、後から突き合わせられる。
     """
     line = f"{iso_timestamp()} {msg}"
     try:
@@ -201,11 +201,11 @@ def notify_fatal(msg: str) -> None:
 
 
 def open_in_file_manager(path: Path) -> bool:
-    """保存先フォルダを OS のファイルマネージャで開く（F-D4）。開けたら True。
+    """保存先フォルダを OS のファイルマネージャで開く。開けたら True。
 
     操作バーの「フォルダを開く」ボタンから呼ぶ。撮影物・ダウンロード・log.txt が
     集まった保存先（起動単位のセッションフォルダ）を、利用者がその場で開けるようにする
-    （受け渡しが「このフォルダを渡す」で閉じる F-C3 と対の導線）。
+    （受け渡しが「このフォルダを渡す」で閉じるセッションフォルダと対の導線）。
 
     配布対象は Windows なので本命は os.startfile だが、開発機の macOS や Linux でも
     確認できるよう OS ごとに分岐する（_message_box と同じ方針）。存在しないフォルダや
@@ -226,7 +226,7 @@ def open_in_file_manager(path: Path) -> bool:
 
 
 def startup_environment_line() -> str:
-    """起動環境（OS・Python・実行形態・基準フォルダ）を1行に整形する（D-B2）。
+    """起動環境（OS・Python・実行形態・基準フォルダ）を1行に整形する。
 
     channel="msedge"/"chrome" は環境の Edge/Chrome に依存するため、どの OS・どの
     ランタイム・どの場所で動いたのかをログへ残すと不具合の切り分けが速い。実際に
@@ -243,7 +243,7 @@ def startup_environment_line() -> str:
 
 # 使い捨てプロファイルを「掃除対象」とみなす下限の経過時間（秒）。
 # これより新しい edge-debug-* は、別インスタンスが今まさに使用中の可能性が高いので
-# 触らない（A-5 同時起動衝突の保険）。通常は D-C4 の多重起動抑止で他インスタンスが
+# 触らない（同時起動衝突の保険）。通常は多重起動抑止で他インスタンスが
 # そもそも起動しないため発火しないが、抑止をすり抜けた場合の最後の砦として残す。
 _PROFILE_STALE_AGE_SECONDS = 3 * 60 * 60  # 3 時間
 
@@ -257,11 +257,11 @@ def cleanup_old_profiles(
     使用中のフォルダは削除に失敗しても無視する（ignore_errors=True）。
 
     keep を渡すと、そのフォルダは掃除対象から除外する（再利用する永続
-    プロファイル [F-C1] を誤って消さないための安全弁）。永続プロファイルは
+    プロファイルを誤って消さないための安全弁）。永続プロファイルは
     通常 edge-debug-* とは別名・別置き場所なので glob には一致しないが、
     利用者が一時フォルダ配下に edge-debug- で始まる名前を指定した場合の保険。
 
-    min_age_seconds より新しいフォルダは掃除しない（A-5）。多重起動が抑止を
+    min_age_seconds より新しいフォルダは掃除しない。多重起動が抑止を
     すり抜けた場合でも、別インスタンスが使用中の新しいプロファイルを消して
     稼働中の Edge を壊さないための保険。mtime が取れないものは安全側に倒して残す。
     """
@@ -298,11 +298,11 @@ def single_instance_lock_path() -> Path:
 
 
 def acquire_single_instance_lock() -> bool:
-    """アプリ全体で 1 プロセスだけ起動を許す（D-C4 多重起動抑止）。
+    """アプリ全体で 1 プロセスだけ起動を許す（多重起動抑止）。
 
     取得できたら True、既に他インスタンスが保持していれば False を返す。
     第三者は反応が無いと二度押しするため、2 つ目が起動して output/・log.txt・
-    使い捨てプロファイル（A-5）を奪い合うのを入口で止める。
+    使い捨てプロファイルを奪い合うのを入口で止める。
 
     OS のファイルロック（POSIX: flock / Windows: msvcrt）を使う。プロセスが
     終了すると OS が自動でロックを外すので、クラッシュ後に残ったロックファイルが

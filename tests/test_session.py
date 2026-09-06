@@ -1,7 +1,7 @@
 """監視セッション（edge_auto_capture.app.CaptureSession）と起動シーケンスのユニットテスト。
 
-タブ系譜（グループ）の解決・記録状態のゲート・URL変化のイベント駆動（B-1）・操作バーへの
-状態配布（F-D2 / F-D3 / F-D4）・main() から切り出した起動シーケンスを、実 Edge 無しで
+タブ系譜（グループ）の解決・記録状態のゲート・URL変化のイベント駆動・操作バーへの
+状態配布（セレクタ履歴・撮影カウンタ・保存先を開く）・main() から切り出した起動シーケンスを、実 Edge 無しで
 （opener を返すページ代役と spawn 記録用スタブで）守る。入口 cli()（#50）も、asyncio.run の
 差し替え口を使ってブラウザ無しで順序・多重起動抑止・終了コードを守る。
 
@@ -343,7 +343,7 @@ def test_refresh_panels_distributes_each_pages_own_group_state():
 
 
 # --------------------------------------------------------------------------- #
-# F-D4: 保存先フォルダを開く
+# 保存先フォルダを開く
 #
 # 「保存先」ボタンは config.output_dir（起動単位のセッションフォルダ）を OS の
 # ファイルマネージャで開く。グループ状態には依存せず、token 照合だけを見る。
@@ -400,7 +400,7 @@ def test_open_in_file_manager_invokes_platform_opener(monkeypatch, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# F-D2: セレクタ履歴（入力欄の datalist 候補）
+# セレクタ履歴（入力欄の datalist 候補）
 #
 # 確定したセレクタ（blur/Enter）をセッション横断の履歴へ積み、全バーの入力候補として配る。
 # 新しい順・重複なし・上限あり。get_state にも同梱して遷移後のバーが候補を失わないようにする。
@@ -482,7 +482,7 @@ def test_get_state_includes_selector_history():
 
 
 def test_set_history_call_serializes_values():
-    # 日本語/記号を含む値も JS 配列リテラルとして安全に埋め込む。E-3: 固定名でなく
+    # 日本語/記号を含む値も JS 配列リテラルとして安全に埋め込む。固定名でなく
     # 起動ごとのランダム名 ns の隠しオブジェクト window[ns].setHistory(...) を呼ぶ式を組む。
     call = badge.set_history_call("nabc", ["#main", ".一覧"])
     assert call.startswith('window["nabc"] && window["nabc"].setHistory && '
@@ -492,7 +492,7 @@ def test_set_history_call_serializes_values():
 
 
 def test_trigger_threaded_per_path():
-    # 撮影契機が投入元 3 経路から CaptureRequest.trigger に載る（F-A1）:
+    # 撮影契機が投入元 3 経路から CaptureRequest.trigger に載る:
     # on_shot="manual" / on_spa_changed="spa" / _shoot_if_changed="url" /
     # 記録開始(on_toggle)の即撮り="url"。
     from edge_auto_capture.app import GroupState
@@ -526,7 +526,7 @@ def test_trigger_threaded_per_path():
 
 
 # --------------------------------------------------------------------------- #
-# URL変化のイベント駆動化（B-1）: _shoot_if_changed / _on_navigated / _on_page_closed
+# URL変化のイベント駆動化: _shoot_if_changed / _on_navigated / _on_page_closed
 #
 # 旧・毎tickポーリングの run ループを廃し、framenavigated / close で撮る/掃除する。
 # 実 Playwright を使わず、url を書き換えられるフェイクページで挙動を回帰から守る。
@@ -646,8 +646,8 @@ def test_get_state_returns_group_state():
         r = _GroupPage("r")
         s = _make_session([r], roots={r: GroupState(on=True, spa_on=True, selector="#c")})
         state = await s.get_state({"page": r}, token=s.token)
-        # 撮影カウンタ（count）とセレクタ履歴（history）も同梱する（F-D3/F-D2。
-        # 再描画されたバーの枚数復元・datalist 候補復元に使う）。
+        # 撮影カウンタ（count）とセレクタ履歴（history）も同梱する
+        #（再描画されたバーの枚数復元・datalist 候補復元に使う）。
         assert state == {
             "recording": True, "spa": True, "selector": "#c", "count": 0, "history": [],
         }
@@ -685,13 +685,13 @@ def test_prune_drops_group_when_all_pages_closed():
 
 
 # --------------------------------------------------------------------------- #
-# F-D3: 撮影カウンタ / 失敗表示（成否を JS へ通知する経路）
+# 撮影カウンタ / 失敗表示（成否を JS へ通知する経路）
 # --------------------------------------------------------------------------- #
 
 
 def test_capture_end_call_encodes_success_and_failure():
     # done 有無を真偽値としてページ側 captureEnd へ渡す呼び出し式を組む（成功=赤/失敗=琥珀）。
-    # E-3: 固定名でなく起動ごとのランダム名 ns の隠しオブジェクト window[ns].captureEnd(...) を呼ぶ。
+    # 固定名でなく起動ごとのランダム名 ns の隠しオブジェクト window[ns].captureEnd(...) を呼ぶ。
     assert badge.capture_end_call("nabc", True) == (
         'window["nabc"] && window["nabc"].captureEnd && window["nabc"].captureEnd(true)'
     )
@@ -701,7 +701,7 @@ def test_capture_end_call_encodes_success_and_failure():
 
 
 def test_set_count_call_encodes_count():
-    # 撮影カウンタ（本セッション枚数）をバーへ配る呼び出し式を組む（E-3: window[ns].setCount）。
+    # 撮影カウンタ（本セッション枚数）をバーへ配る呼び出し式を組む（window[ns].setCount）。
     assert badge.set_count_call("nabc", 0) == (
         'window["nabc"] && window["nabc"].setCount && window["nabc"].setCount(0)'
     )
@@ -711,7 +711,7 @@ def test_set_count_call_encodes_count():
 
 
 def test_new_namespace_is_random_and_carries_no_hint():
-    # E-3: 起動ごとに使い捨てるランダム名。先頭は英字（数値インデックス的扱いを避ける）で、
+    # 起動ごとに使い捨てるランダム名。先頭は英字（数値インデックス的扱いを避ける）で、
     # __eac のような固定の手掛かりを含まない（含めると全文一致でなくても勘付かれうる）。
     #
     # 「手掛かりを含まない」は部分文字列ではなく**形そのもの**で縛る。以前は
@@ -729,7 +729,7 @@ def test_new_namespace_is_random_and_carries_no_hint():
 
 
 def test_build_badge_script_hides_fixed_globals():
-    # E-3: 固定名（window.__eacApplyState 等）を生やさず、ランダム名 ns の非列挙プロパティへ収める。
+    # 固定名（window.__eacApplyState 等）を生やさず、ランダム名 ns の非列挙プロパティへ収める。
     # ②のページ→Python バインディング固定名は退避後に window から削除する。
     script = badge.build_badge_script(token="t", ns="nXYZ")
     assert '"ns": "nXYZ"' in script                       # ns が $CONFIG に載る
@@ -752,7 +752,7 @@ class _EvalPage:
 
 
 def test_session_wires_runner_on_result():
-    # CaptureSession は runner の成否通知を自分のカウンタ更新へ配線する（F-D3）。
+    # CaptureSession は runner の成否通知を自分のカウンタ更新へ配線する。
     from edge_auto_capture.app import CaptureSession
 
     session = CaptureSession(_FakeContext([]), Config())
@@ -771,7 +771,7 @@ def test_on_capture_result_counts_only_success_and_pushes():
         await session._on_capture_result(True)
         assert session.shots == 1
         # 成功のたびに現在の枚数を全ページへ配る（set_count_call の式が evaluate される）。
-        # E-3: 呼び出し式はセッションのランダム名 ns（window[ns].setCount）を使う。
+        # 呼び出し式はセッションのランダム名 ns（window[ns].setCount）を使う。
         assert p1.evals == [badge.set_count_call(session.ns, 1)]
         assert p2.evals == [badge.set_count_call(session.ns, 1)]
 
@@ -822,7 +822,7 @@ class _FakeCapturePage:
 
     async def evaluate(self, js, *args):
         self.eval_calls.append(js)
-        # 既定の CaptureRunner は ns="" なので、_capture は body_text_call("") を渡す（E-3）。
+        # 既定の CaptureRunner は ns="" なので、_capture は body_text_call("") を渡す。
         if js == badge.body_text_call(""):
             if not self.text_ok:
                 raise RuntimeError("no text")
@@ -831,7 +831,7 @@ class _FakeCapturePage:
 
 
 def test_capture_notifies_result_true_on_success(tmp_path):
-    # png/txt が撮れたら captureEnd に ok=true を渡し、on_result にも True が届く（F-D3）。
+    # png/txt が撮れたら captureEnd に ok=true を渡し、on_result にも True が届く。
     async def scenario():
         runner = CaptureRunner()
         got: list[bool] = []
@@ -877,7 +877,7 @@ def test_capture_notifies_result_false_on_total_failure(tmp_path):
     [
         ("manual", True),   # 手動：load 直後にまだ描画が動くので settle_delay を待つ
         ("url", True),      # URL遷移：同上
-        ("spa", False),     # SPA：ページ側デバウンスで確定済み。二重待ちを避けて省く（B-4, #18）
+        ("spa", False),     # SPA：ページ側デバウンスで確定済み。二重待ちを避けて省く（#18）
     ],
 )
 def test_capture_skips_settle_sleep_only_for_spa(tmp_path, monkeypatch, trigger, expect_settle_sleep):
@@ -1023,8 +1023,8 @@ def test_launch_browser_returns_none_and_notifies_when_all_fail(monkeypatch):
 #
 # __main__ から切り出した入口（#50）。asyncio.run の差し替え口を使い、実ブラウザを
 # 起こさずに「設定読み込み → 起動ログ3行 → 多重起動ロック → 監視の実行 → 終了ログ」の
-# 順序と終了コードを守る。特に多重起動抑止（D-C4）は、抜けると output/・log.txt・
-# 使い捨てプロファイル（A-5）を 2 プロセスで奪い合う実害のある分岐。
+# 順序と終了コードを守る。特に多重起動抑止は、抜けると output/・log.txt・
+# 使い捨てプロファイルを 2 プロセスで奪い合う実害のある分岐。
 # --------------------------------------------------------------------------- #
 
 
@@ -1133,7 +1133,7 @@ def test_cli_hands_loaded_config_to_main(monkeypatch):
 
 
 def test_cli_blocks_second_instance_before_starting_browser(monkeypatch):
-    # D-C4: ロックを取れなければブラウザを起こさずに終了コード 1。
+    # ロックを取れなければブラウザを起こさずに終了コード 1。
     # ここが抜けると 2 つ目のプロセスが output/・log.txt・使い捨てプロファイルを奪い合う。
     stubs = _CliStubs()
     stubs.lock_ok = False

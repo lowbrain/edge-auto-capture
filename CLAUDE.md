@@ -16,7 +16,7 @@ Claude Code 向けの**導線**。ここは内容の出所ではない。
 | 作業環境（macOS 開発 / Windows 専用ツール） | [`CONTRIBUTING.md`](CONTRIBUTING.md) §2「作業環境の注意」 |
 | 検証手順 | [`CONTRIBUTING.md`](CONTRIBUTING.md) §3「検証手順（4 点セット）」／スキル `/verify` |
 | コミット・報告の慣習 | [`CONTRIBUTING.md`](CONTRIBUTING.md) §4「コミット・報告の慣習」 |
-| 課題タグ（`A-` / `B-` / `D-` / `E-` / `F-` / `R`）の意味 | [`CONTRIBUTING.md`](CONTRIBUTING.md) 冒頭の凡例 |
+| 課題タグ（`A-` / `B-` / `D-` / `E-` / `F-` / `R`）— 退役済み。git 履歴を読むときだけ要る | [`CONTRIBUTING.md`](CONTRIBUTING.md) 冒頭「退役語彙」 |
 | 仕組み・設定・ビルド・配布 | [`README.md`](README.md) |
 | 利用者向けの使い方（Shift-JIS） | [`USAGE.txt`](USAGE.txt) |
 | **残タスクと現在地・個々のタグの状態** | Issue [#78](https://github.com/lowbrain/edge-auto-capture/issues/78)（ピン留め・これが正） |
@@ -30,7 +30,7 @@ Claude Code 向けの**導線**。ここは内容の出所ではない。
 
 | 触るもの | 読む節 | 一言 |
 |---|---|---|
-| `badge.js` / `badge.py`（`src/edge_auto_capture/` 配下） | §1-1, §1-5, §1-6 | 言語境界。`$CONFIG` 単純置換・バインディング名の二重管理・`closed` シャドウ・`E-3` 固定名禁止 |
+| `badge.js` / `badge.py`（`src/edge_auto_capture/` 配下） | §1-1, §1-5, §1-6 | 言語境界。`$CONFIG` 単純置換・バインディング名の二重管理・`closed` シャドウ・固定名禁止 |
 | `USAGE.txt` | §1-4 | Shift-JIS。往復変換で確認する |
 | 型注釈 | §1-2, §1-8 | Python 3.9+。`X \| Y` 記法は使わない。mypy の 3.10 設定は意図的 |
 | 例外処理まわり | §1-3 | 握り潰しは意図的な設計。消す方向の一括リファクタをしない |

@@ -13,18 +13,18 @@
 // バーを上へスライドさせて画面外へ退避してから撮る（意図した動作に見せる）。撮影が
 // 終わったら全画面を赤く一瞬フラッシュ（シャッター確定の合図）し、バーを元位置へ戻す。
 //
-// Python から使う API（E-3: 固定名を window に生やさない）:
+// Python から使う API（固定名を window に生やさない）:
 //   Python→ページのヘルパは、起動ごとのランダム名 NS（$CONFIG の ns）の下へ 1 オブジェクトに
 //   まとめ、enumerable:false で公開する。固定名が無いのでサイトから存在検知できない。Python は
 //   NS を知っているので window[NS].xxx(...) の形で呼ぶ（badge.py の *_call が式を組み立てる）:
 //   - window[NS].applyState(recording, spaOn, selector) : 見た目を現在状態へ更新
 //   - window[NS].setCount(n)                             : 撮影カウンタ（本セッション枚数）を更新
-//   - window[NS].setHistory(list)                        : セレクタ入力欄の候補（datalist）を更新（F-D2）
+//   - window[NS].setHistory(list)                        : セレクタ入力欄の候補（datalist）を更新
 //   - window[NS].captureStart()                          : バーを退避し切るまで待つ（撮影直前）
 //   - window[NS].captureEnd(ok)                          : シャッターフラッシュ（ok=成功は赤/失敗は琥珀）＋バー復帰（撮影直後）
 //   - window[NS].bodyText()                              : バー除外の本文 innerText
 //   - window[NS].signature(selector)                    : コンテンツ署名（スモークテスト用）
-//   ページ→Python は expose_binding（下記）。呼び出し名は BOUND へ退避後に window から消す（E-3）:
+//   ページ→Python は expose_binding（下記）。呼び出し名は BOUND へ退避後に window から消す:
 //   - __eac_getstate(tok)         : 描画前に現在状態を取得（枚数 count も含む）
 //   - SPA検知はページ側がイベント駆動で行い、落ち着いた変化を検知したら __eac_spa_changed(tok, sig)
 //     を呼んで保存を要求する。
@@ -39,7 +39,7 @@
 //   2. expose_binding の参照は IIFE 冒頭で退避する（BOUND）。add_init_script はサイトの JS より
 //      先に走るので、ここで掴んだ参照は本物。サイトが window.__eac_toggle を自前関数で包んでも、
 //      利用者のクリックはその関数を通らないため、第1引数の tok を盗まれない。
-//   3. E-3（存在検知の防止）: Python→ページのヘルパは固定名でなくランダム名 NS の非列挙プロパティ
+//   3. 存在検知の防止: Python→ページのヘルパは固定名でなくランダム名 NS の非列挙プロパティ
 //      へ収め、ページ→Python の expose_binding 固定名は退避後に window から削除する。これにより
 //      `'__eacApplyState' in window` や `'__eac_toggle' in window` のような固定名での検知が効かない。
 (() => {
@@ -51,14 +51,14 @@
   // 行っても Python 側で無視される。起動ごとにランダム生成した値が Python から渡ってくる。
   const TOK = C.tok || "";
 
-  // --- expose_binding（Python 側の呼び出し口）の参照を退避し、固定名を window から消す（E-3）---
+  // --- expose_binding（Python 側の呼び出し口）の参照を退避し、固定名を window から消す ---
   // add_init_script はサイトの JS より先に実行されるため、ここで掴んだ参照は「本物」である。
   // (1) 参照の退避（BOUND）: これをしないと、サイト側が
   //       const orig = window.__eac_toggle;
   //       window.__eac_toggle = (t) => { stolen = t; return orig(t); };
   //     のように包んでおくだけで、利用者がボタンを押した瞬間に合言葉（TOK）を盗める。
   //     盗まれれば token 照合は無意味になり、以後は自由に記録操作・連写ができてしまう。
-  // (2) 固定名の削除（E-3）: expose_binding は全フレームの window に固定名（__eac_toggle 等）で
+  // (2) 固定名の削除: expose_binding は全フレームの window に固定名（__eac_toggle 等）で
   //     生えるため、サイトは `'__eac_toggle' in window` でツールの存在を検知できてしまう。
   //     本物の参照を BOUND へ退避したうえで window 上の固定名を消す。以後の呼び出しは BOUND を
   //     使う（callBinding）ので機能は保たれ、サイト JS が動き出す前には固定名が消えている。
@@ -84,15 +84,15 @@
 
   const ID = C.id;
   const S_ON = C.sOn, S_OFF = C.sOff, L_START = C.lStart, L_STOP = C.lStop, L_SHOT = C.lShot;
-  const L_OPEN = C.lOpen, TITLE_OPEN = C.titleOpen;   // F-D4: 保存先フォルダを開くボタンの文言/説明
+  const L_OPEN = C.lOpen, TITLE_OPEN = C.titleOpen;   // 保存先フォルダを開くボタンの文言/説明
   const L_SHOTS = C.lShots;   // 撮影カウンタの文言（"本セッション {n} 枚"）。{n} を枚数に置換する。
   const TITLE_PEEK = C.titlePeek;
-  const ARIA_PEEK = C.ariaPeek;   // E-1: アイコンのみの透過ボタンのアクセシブル名
+  const ARIA_PEEK = C.ariaPeek;   // アイコンのみの透過ボタンのアクセシブル名
   const L_SPA = C.lSpa, PH_SEL = C.phSel, TITLE_SEL = C.titleSel, TITLE_SPA = C.titleSpa;
-  // E-3: Python から呼ぶページ側ヘルパを収める、起動ごとのランダムな window プロパティ名。
+  // Python から呼ぶページ側ヘルパを収める、起動ごとのランダムな window プロパティ名。
   // 固定名（window.__eacApplyState 等）を生やさないための隠し名。空なら公開しない（テスト用）。
   const NS = C.ns || "";
-  // F-B2: 撮影中だけ隠す要素の CSS セレクタ群（同意バナー・追従ヘッダ対策）。空なら何もしない。
+  // 撮影中だけ隠す要素の CSS セレクタ群（同意バナー・追従ヘッダ対策）。空なら何もしない。
   const HIDE_SEL = Array.isArray(C.hideSel) ? C.hideSel : [];
 
   // バインディング呼び出しの唯一の入り口。退避済み参照を優先して使う。
@@ -123,12 +123,12 @@
   let selector = "";       // 直近に適用された SPA 検知対象セレクタ（入力欄の値）
   let peekOn = false;      // 透過（半透明）表示中か。下に隠れた内容を確認するための一時状態。
   let shotCount = 0;       // 本セッションで保存できた枚数（Python が本体を持ち、setCount で配る）。
-  let selHistory = [];     // 過去に確定したセレクタの候補（datalist）。Python が本体を持ち setHistory で配る（F-D2）。
+  let selHistory = [];     // 過去に確定したセレクタの候補（datalist）。Python が本体を持ち setHistory で配る。
   let capDepth = 0;        // 進行中の撮影数（重なっても最後の1つで復帰させるための入れ子カウント）
   let frameTimer = null;   // シャッターフラッシュ（.flash クラス）を消すためのタイマー
   let barTimer = null;     // フラッシュ後にバー復帰を少し遅らせるためのタイマー
   let countedSel = null;   // 一致件数を最後に計算したセレクタ（毎tickの無駄な再計算を避ける）
-  let hiddenEls = [];      // 撮影中に隠した要素と復元用の元 visibility 値（F-B2）
+  let hiddenEls = [];      // 撮影中に隠した要素と復元用の元 visibility 値
 
   // --- SPA検知（中身変化のイベント駆動監視） ---
   // 変化は MutationObserver で捉え、SPA_SETTLE_MS のデバウンスで「落ち着いてから」署名を
@@ -142,12 +142,12 @@
   let spaNavPending = false;   // 直近の遷移（pushState等）を消化中か（基準取り直しのみ・通知しない）
   let spaPrevActive = false;   // 直前の「監視中(spaOn && recording)」状態
   let spaPrevSelector = '';    // 直前のセレクタ（変更検知で基準取り直し）
-  let spaObserver = null;      // SPA監視の MutationObserver（監視中のときだけ接続する。B-6）
+  let spaObserver = null;      // SPA監視の MutationObserver（監視中のときだけ接続する）
 
   let host = null;         // ページ側 DOM に置くシャドウホスト（本文取得時の非表示もこれを操作）
   let shadow = null;       // host.shadowRoot（フォーカス判定・要素取得に使う）
   let els = null;          // シャドウ内の主要要素をまとめた参照
-  let barObserver = null;  // バー再構築監視の MutationObserver（body 確定後に一度だけ張る。B-6）
+  let barObserver = null;  // バー再構築監視の MutationObserver（body 確定後に一度だけ張る）
 
   // シャドウホストの最小限のスタイル。画面上端いっぱいに敷いて重なり順と当たり判定の
   // 透過だけをインライン !important で固定する（サイト側 CSS に負けない）。見た目は
@@ -187,7 +187,7 @@
     .dot.rec{background:#fff;border:0;}
     .dot.idle{background:transparent;border:2px solid rgba(255,255,255,.85);}
     .label{flex:0 0 auto;}
-    /* 撮影カウンタ（本セッション N 枚）。控えめな白字で常時出す（F-D3）。 */
+    /* 撮影カウンタ（本セッション N 枚）。控えめな白字で常時出す。 */
     .shots{flex:0 0 auto;white-space:nowrap;color:rgba(255,255,255,.9);
       font-family:"Segoe UI",sans-serif;font-size:12px;font-weight:normal;line-height:1;}
     .btn{box-sizing:border-box;flex:0 0 auto;height:26px;display:inline-flex;align-items:center;
@@ -242,7 +242,7 @@
     .frame{position:fixed;inset:0;
       background:rgba(255,0,0,.10);box-shadow:inset 0 0 90px 14px rgba(255,0,0,.55);
       pointer-events:none;opacity:0;}
-    /* 保存失敗時のフラッシュ（F-D3）: 成功（赤）と同じ色だと「撮れた」と誤解を招くので、
+    /* 保存失敗時のフラッシュ: 成功（赤）と同じ色だと「撮れた」と誤解を招くので、
        警告色の琥珀へ差し替える。発光アニメーション（.flash）は共通で、色だけを変える。 */
     .frame.fail{background:rgba(255,170,0,.12);box-shadow:inset 0 0 90px 14px rgba(255,150,0,.6);}
     .frame.flash{animation:eac-shutter .5s ease-out;}
@@ -315,7 +315,7 @@
     els.spa.classList.toggle('on', spaOn);
     els.spa.classList.toggle('off', !spaOn);
     els.spaText.textContent = spaOn ? 'ON' : 'OFF';
-    // E-1: role="switch" の状態を支援技術へ伝える（見た目のクラス切替と同じ所で反映）。
+    // role="switch" の状態を支援技術へ伝える（見た目のクラス切替と同じ所で反映）。
     els.spa.setAttribute('aria-checked', spaOn ? 'true' : 'false');
   }
 
@@ -338,7 +338,7 @@
     }
   }
 
-  // 撮影カウンタ（本セッション N 枚）の表示を更新する（F-D3）。枚数の本体は Python が持ち、
+  // 撮影カウンタ（本セッション N 枚）の表示を更新する。枚数の本体は Python が持ち、
   // 保存成功のたびに setCount で配られる。バー未構築なら値だけ覚えて描画時に反映する。
   function renderShots() {
     if (els && els.shots) els.shots.textContent = L_SHOTS.replace('{n}', shotCount);
@@ -351,7 +351,7 @@
     renderShots();
   }
 
-  // F-D2: セレクタ入力欄の候補（datalist の <option>）を過去の確定値で作り直す。候補の
+  // セレクタ入力欄の候補（datalist の <option>）を過去の確定値で作り直す。候補の
   // 本体は Python が持ち、セレクタ確定（blur/Enter）のたびに setHistory で全バーへ配られる。
   // バー未構築なら値だけ覚えておき、描画時（build）に反映する。
   function renderHistory() {
@@ -371,7 +371,7 @@
     renderHistory();
   }
 
-  // F-B2: 撮影中だけ hide_selectors 該当要素を隠す。同意バナー・追従ヘッダなどが証跡
+  // 撮影中だけ hide_selectors 該当要素を隠す。同意バナー・追従ヘッダなどが証跡
   // （スクショ）に被るのを防ぐ。visibility:hidden で場所は保ったまま不可視にし、撮影後に
   // 元のインライン値へ厳密に戻す（元々 visibility を持っていたかを覚えておく）。撮影が
   // 重なっても最初の1回だけ隠し、最後の1つで戻す（captureStart/End の capDepth と対）。
@@ -400,17 +400,17 @@
     return new Promise((resolve) => {
       if (!els || !els.bar) { resolve(); return; }
       capDepth++;
-      if (capDepth === 1) hideEls();   // F-B2: 最初の撮影で hide_selectors を隠す（重なりは1回だけ）
+      if (capDepth === 1) hideEls();   // 最初の撮影で hide_selectors を隠す（重なりは1回だけ）
       // 前回の「復帰待ち」が残っていれば取り消し、退避状態を維持する（撮影が重なっても
       // 途中でバーが降りてきて次のスクショに写り込まないように）。
       if (barTimer) { clearTimeout(barTimer); barTimer = null; }
-      // A-1: 直前の撮影のシャッターフラッシュ（.frame.flash, CSS 500ms）が残っていると、
+      // 直前の撮影のシャッターフラッシュ（.frame.flash, CSS 500ms）が残っていると、
       // 次のスクショに赤みとして写り込む。復帰待ちを消すのと同時にフラッシュも畳む。
       if (frameTimer) { clearTimeout(frameTimer); frameTimer = null; }
       if (els.frame) els.frame.classList.remove('flash', 'fail');
       if (capDepth > 1) { resolve(); return; }   // 既に退避済み（別の撮影が進行中）
       const bar = els.bar;
-      // A-2: バーが既に capturing（退避済み）なら classList.add は no-op で transitionend が
+      // バーが既に capturing（退避済み）なら classList.add は no-op で transitionend が
       // 飛ばず、CAP_FALLBACK_MS(500ms) まで無駄に待つ。退避済みなら即解決して待たない。
       if (bar.classList.contains('capturing')) { resolve(); return; }
       let done = false;
@@ -430,12 +430,12 @@
   //（シャッター確定の合図）、少し遅らせてからバーを元位置へスライドで戻す。フラッシュと
   // 復帰の動きを時間差にすることで、隠すときと同じ「上から降りてくる」動きが単独で見える。
   // 撮影が重なっていれば最後の1つで戻す。ok は _capture の done 有無で、成功は赤・失敗は
-  // 琥珀にフラッシュ色を分ける（F-D3。成否を渡さない無引数呼び出しは従来どおり成功＝赤）。
+  // 琥珀にフラッシュ色を分ける（成否を渡さない無引数呼び出しは従来どおり成功＝赤）。
   function captureEnd(ok) {
     if (!els || !els.bar) return;
     if (capDepth > 0) capDepth--;
     if (capDepth > 0) return;                     // まだ他の撮影が進行中
-    showEls();                                    // F-B2: 隠していた要素を元へ戻す（撮影は完了済み）
+    showEls();                                    // 隠していた要素を元へ戻す（撮影は完了済み）
     // 1) シャッターフラッシュ（クラスを付け直して毎回アニメを頭から再生）。
     const failed = (ok === false);                // 明示的に false（保存全滅）のときだけ失敗色
     if (els.frame) {
@@ -457,7 +457,7 @@
     }, BAR_RETURN_MS);
   }
 
-  // B-6: バーが消えたら付け直すための監視。host は body の直接の子として append するので、
+  // バーが消えたら付け直すための監視。host は body の直接の子として append するので、
   // body の childList（直下の追加/削除）だけ見れば足りる。subtree は使わない（文書全体の
   // あらゆる変化で発火させない＝閲覧中の恒常負荷を避ける）。add_init_script 時点では body が
   // まだ無いことがあるため、build が body へ append できた後（＝body 確定後）に一度だけ張る。
@@ -494,14 +494,14 @@
 
       // 静的な文言・ホバー説明を入れる。
       els.shot.textContent = L_SHOT;
-      // F-D4: 保存先フォルダを開くボタン。文言＋ホバー説明を入れる。
+      // 保存先フォルダを開くボタン。文言＋ホバー説明を入れる。
       els.open.textContent = L_OPEN;
       els.open.title = TITLE_OPEN;
       // アイコンボタンなので文言は入れず、ホバー説明（title）だけ付ける。
-      // E-1: 可視テキストが無いのでアクセシブル名を aria-label で明示する。
+      // 可視テキストが無いのでアクセシブル名を aria-label で明示する。
       els.peek.title = TITLE_PEEK;
       els.peek.setAttribute('aria-label', ARIA_PEEK);
-      // E-1: SPA検知はトグルスイッチ（role="switch"）。可視テキストは "ON"/"OFF" だけで
+      // SPA検知はトグルスイッチ（role="switch"）。可視テキストは "ON"/"OFF" だけで
       // 何のスイッチか分からないため、横のラベルと同じ語をアクセシブル名として付ける。
       // 状態（checked）は apply() で aria-checked を随時反映する。
       els.spa.setAttribute('aria-label', L_SPA);
@@ -517,7 +517,7 @@
       // 呼び出しは callBinding に通す（退避済みの本物を使い、TOK をサイト側へ渡さない）。
       els.toggle.addEventListener('click', () => callBinding('__eac_toggle', TOK));
       els.shot.addEventListener('click', () => callBinding('__eac_shot', TOK));
-      // F-D4: 保存先フォルダを開く。Python 側が OS のファイルマネージャで開く（ローカル操作）。
+      // 保存先フォルダを開く。Python 側が OS のファイルマネージャで開く（ローカル操作）。
       els.open.addEventListener('click', () => callBinding('__eac_open_folder', TOK));
       // 透過トグルは見た目だけのローカル状態（Python への通知は不要）。押すたびに反転して再描画する。
       els.peek.addEventListener('click', () => { peekOn = !peekOn; apply(recording, spaOn); });
@@ -532,7 +532,7 @@
       els.sel.addEventListener('change', () => callBinding('__eac_commit_selector', TOK, els.sel.value));
 
       document.body.appendChild(host);
-      // B-6: バーが site の再描画で消えたら付け直すための監視を張る（body 確定後の今だけ）。
+      // バーが site の再描画で消えたら付け直すための監視を張る（body 確定後の今だけ）。
       ensureBarObserver();
       // 作り直したバーでは件数を必ず数え直させる（同じセレクタでも新しい要素は空のため）。
       countedSel = null;
@@ -540,7 +540,7 @@
       apply(!!(state && state.recording), !!(state && state.spa), (state && state.selector) || '');
       // 撮影カウンタも現在値で描画する（再描画されたバーが 0 枚に戻って見えないように）。
       setShotCount((state && typeof state.count === 'number') ? state.count : shotCount);
-      // セレクタ候補（datalist）も現在値で描画する（作り直したバーで候補が空にならないように。F-D2）。
+      // セレクタ候補（datalist）も現在値で描画する（作り直したバーで候補が空にならないように）。
       setHistory((state && Array.isArray(state.history)) ? state.history : selHistory);
     };
     const fallback = { recording: recording, spa: spaOn, selector: selector };
@@ -617,7 +617,7 @@
   // 「基準」に取り直す（開始/変更の直後に無駄撮りしないため）。Python 側で行っていた
   // reseed 相当をページ側で行う。apply から毎回呼ぶが、基準の再計算は遷移時だけ走る。
   //
-  // B-6: SPA 監視の MutationObserver は、この spaActive の切り替わりに合わせて
+  // SPA 監視の MutationObserver は、この spaActive の切り替わりに合わせて
   // observe / disconnect する。SPA検知を使っていない間（記録OFF or SPA検知OFF）は
   // Observer が動かないので、閲覧しているだけの利用者にコールバックのコストがかからない。
   function spaSyncBaseline() {
@@ -685,7 +685,7 @@
     spaSchedule();
   }
 
-  // --- ① Python から呼ぶページ側ヘルパを、ランダム名の隠しプロパティへ収める（E-3）---
+  // --- ① Python から呼ぶページ側ヘルパを、ランダム名の隠しプロパティへ収める ---
   // 固定名（window.__eacApplyState 等）だと `'__eacApplyState' in window` で存在検知できてしまう。
   // 起動ごとのランダム名 NS の下へ 1 オブジェクトとしてまとめ、enumerable:false にして
   // Object.keys / for-in / JSON.stringify に出ないようにする。Python は NS を知っているので
@@ -720,7 +720,7 @@
   } else {
     build();
   }
-  // B-6: 以前はここで 2 つの MutationObserver（バー再構築・SPA検知）を documentElement に
+  // 以前はここで 2 つの MutationObserver（バー再構築・SPA検知）を documentElement に
   // subtree で常時張っていたが、閲覧しているだけの利用者にも恒常的な負荷がかかっていた。
   //   - バー再構築 → build 内 ensureBarObserver（body の childList のみ・body 確定後に張る）
   //   - SPA検知   → spaSyncBaseline 内 spaObserverConnect/Disconnect（監視中のときだけ接続）
@@ -728,7 +728,7 @@
   //
   // ルート変化（SPA の画面遷移）のフック。pushState / replaceState を包み、popstate /
   // hashchange も拾う。いずれも onRoute（基準取り直し）へ回す。
-  // E-2: 以前は毎回無条件にラップしていたため、(1) 元へ戻せない (2) 同一ドキュメントに
+  // 以前は毎回無条件にラップしていたため、(1) 元へ戻せない (2) 同一ドキュメントに
   // 複数回注入されると多重ラップになる、という後始末漏れがあった。原参照を包み側に保持し、
   // 既にこのバーが包んだものは包み直さないガードを入れる（ラップは 1 回だけ）。
   const hookHistory = (name) => {

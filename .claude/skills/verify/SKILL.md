@@ -63,9 +63,9 @@ mypy .
 | `config.py` / `lineage.py` / `capture.py` / `browser.py` のロジック | pytest | ほぼ守られる |
 | `badge.js` / `badge.py` | **smoke だけ**（pytest では守れない） | 実 Edge 固有の挙動 |
 | `infra._message_box_windows` | **どれも守らない** | `ctypes.windll` 経路。macOS では `_message_box_macos`（`osascript`）側しか通らない |
-| `infra.resolve_writable_dir`（`D-C1`） | pytest（macOS のみ） | Windows 実挙動。`%LOCALAPPDATA%` が無い macOS では `tempfile.gettempdir()` へ落ちる方だけを通る |
+| `infra.resolve_writable_dir`（書き込み不可時の退避） | pytest（macOS のみ） | Windows 実挙動。`%LOCALAPPDATA%` が無い macOS では `tempfile.gettempdir()` へ落ちる方だけを通る |
 | `build.ps1` | **どれも守らない** | 全部。PowerShell / Windows 専用で macOS では実行すらできない |
-| 非 HTML ページの扱い（`E-4` / `E-5`） | **どれも守らない** | PDF 内蔵ビューア・`edge://` 特権ページ・Office のダウンロード |
+| 非 HTML ページの扱い（ダウンロードの退避を含む） | **どれも守らない** | PDF 内蔵ビューア・`edge://` 特権ページ・Office のダウンロード |
 | 配布物（exe） | **どれも守らない** | PyInstaller onedir・SmartScreen・AV 誤検知 |
 
 ### smoke が緑でも Windows 実機検証の代わりにはならない

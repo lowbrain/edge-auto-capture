@@ -1,4 +1,4 @@
-"""ダウンロードの退避（E-4）。保存先規約・衝突回避・実際の退避処理をまとめる。
+"""ダウンロードの退避。保存先規約・衝突回避・実際の退避処理をまとめる。
 
 以前は edge_auto_capture.py の CaptureSession が直接持っていた。撮影物の保存先規約を
 lineage.py が持っているのと同じ粒度の関心事なのに本体へ同居していたため、独立モジュールへ
@@ -15,7 +15,7 @@ from .lineage import group_folder_name, group_subdir
 
 
 def _downloads_dir(config: Config, group_id: str = "") -> Path:
-    """利用者のダウンロードを残す保存先を返す（E-4）。
+    """利用者のダウンロードを残す保存先を返す。
 
     撮影成果物（png/txt/log.txt）と混ざらないよう downloads サブフォルダに分ける。
     保存物と同じく系譜（lineage）ごとにまとめるため、group_id 採番済みなら
@@ -42,7 +42,7 @@ def _unique_path(directory: Path, name: str) -> Path:
 
 
 async def save(download, config: Config, group_id: str = "") -> None:
-    """利用者がブラウザで落としたファイルを保存先へ退避する（E-4）。
+    """利用者がブラウザで落としたファイルを保存先へ退避する。
 
     Playwright は既定でダウンロードをコンテキスト終了時に削除する。
     accept_downloads / downloads_path を指定しても削除される（一時置き場が変わる

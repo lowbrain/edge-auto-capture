@@ -9,7 +9,7 @@
 - capture 側が page.evaluate で呼ぶヘルパ（バー隠し/本文取得/保存フラッシュ）の
   呼び出し式もここに集約する。
 - sig_call（ページ側 signature の呼び出し式）だけは本番経路では使わない。SPA検知の署名
-  計算は B-1 / B-2 でページ側（badge.js の MutationObserver + デバウンス）へ移り、Python が
+  計算はページ側（badge.js の MutationObserver + デバウンス）へ移り、Python が
   毎tick 署名を評価するポーリングは廃止された。その名残で、いまは tests/smoke_badge.py が
   ページ側ヘルパの疎通確認に使うだけ（詳細は sig_call の docstring）。
 """
@@ -29,14 +29,14 @@ _STATUS_OFF = "待機中"
 _LABEL_START = "記録開始"
 _LABEL_STOP = "記録停止"
 _LABEL_SHOT = "📸 今すぐ1枚"
-# 保存先フォルダ（起動単位のセッションフォルダ）を OS のファイルマネージャで開くボタン（F-D4）。
+# 保存先フォルダ（起動単位のセッションフォルダ）を OS のファイルマネージャで開くボタン。
 # 撮影物・ダウンロード・log.txt が集まった場所をその場で開けるようにする受け渡しの導線。
 _LABEL_OPEN = "📂 保存先"
 _TITLE_OPEN = (
     "撮影物・ダウンロード・log.txt の保存先フォルダ（今回の起動ぶん）を開きます。\n"
     "そのまま「このフォルダを渡す」で受け渡しが済みます。"
 )
-# 撮影カウンタ（本セッションで保存できた枚数）の表示文言（F-D3）。{n} は枚数に置換される。
+# 撮影カウンタ（本セッションで保存できた枚数）の表示文言。{n} は枚数に置換される。
 # 動作している実感と、暴走（意図しない連写）の早期発見のためにバーへ常時出す。
 _LABEL_SHOTS = "本セッション {n} 枚"
 # バーを半透明にして下に隠れた内容を確認するためのトグル（枠なしのアイコンボタン）。
@@ -47,7 +47,7 @@ _TITLE_PEEK = (
 )
 # SPA（URLが変わらず中身だけ変わるページ）向けトグルスイッチの横に出すラベル。
 _LABEL_SPA = "SPA検知"
-# E-1（a11y）: 支援技術（スクリーンリーダー）向けのアクセシブル名。
+# a11y: 支援技術（スクリーンリーダー）向けのアクセシブル名。
 # 透過ボタンはアイコンのみで可視テキストが無く、名前が読み上げられないため aria-label を付ける。
 # （可視テキストを持つボタン＝記録開始/停止・今すぐ1枚・保存先には付けない。二重読み上げになるため）
 _ARIA_PEEK = "透過表示の切り替え"
@@ -110,7 +110,7 @@ def _badge_js_path() -> Path:
 
 
 def new_namespace() -> str:
-    """このセッションのページ側ヘルパ（Python→ページ）を収める window プロパティ名を返す（E-3）。
+    """このセッションのページ側ヘルパ（Python→ページ）を収める window プロパティ名を返す。
 
     以前は `window.__eacApplyState` 等の固定名でページ側へ公開していたため、閲覧中サイトが
     `'__eacApplyState' in window` のようにしてツールの存在を検知できた。起動ごとにランダムな
@@ -140,11 +140,11 @@ def build_badge_script(
     中身変化が「この時間だけ止まったら落ち着いた」とみなして署名を確定する。Config の
     settle_delay（秒）をミリ秒へ直して渡す（config.ini で調整可能）。
 
-    hide_selectors は撮影中だけ隠す要素の CSS セレクタ群（F-B2）。captureStart で該当要素を
+    hide_selectors は撮影中だけ隠す要素の CSS セレクタ群。captureStart で該当要素を
     visibility:hidden にして撮影後に戻す。同意バナー・追従ヘッダなどが証跡（スクショ）に
     被るのを防ぐ。空なら何も隠さない（既定）。
 
-    ns は Python→ページのヘルパを収める window プロパティ名（E-3, new_namespace() が生成）。
+    ns は Python→ページのヘルパを収める window プロパティ名（new_namespace() が生成）。
     badge.js はこの名前で 1 個の非列挙プロパティを作り、apply/captureStart 等をその配下へ
     まとめる。固定名を window に生やさないので、サイトから固定名で存在検知できなくなる。
     空（既定）のときは公開しない（見た目だけ確認するテスト用ビルドで、ヘルパを呼ばない場面）。
@@ -163,7 +163,7 @@ def build_badge_script(
 
 # 完成済みスクリプト（token 無し）は、以前ここで BADGE_SCRIPT = build_badge_script() として
 # モジュール読み込み時に作っていたが、import しただけで badge.js の read_text（I/O）が走り、
-# 凍結（PyInstaller）環境などで失敗経路を 1 つ抱えていた（R5a）。実運用では token 付きの
+# 凍結（PyInstaller）環境などで失敗経路を 1 つ抱えていた。実運用では token 付きの
 # build_badge_script(token) を都度呼ぶだけで、この完成済みスクリプトは使わない。スモークテスト
 # など「バインディングを公開せず見た目だけ確認する」用途は、build_badge_script() を必要時に
 # 呼ぶ（＝遅延化）。これで import 時 I/O を無くした。
@@ -174,14 +174,14 @@ def build_badge_script(
 # （綴りずれは JS 側 try/catch で無言失敗するので、実発火はスモークテストで確認している）。
 BIND_TOGGLE = "__eac_toggle"                  # 記録開始/停止
 BIND_SHOT = "__eac_shot"                       # 今すぐ1枚
-BIND_OPEN_FOLDER = "__eac_open_folder"         # 保存先フォルダを開く（F-D4）
+BIND_OPEN_FOLDER = "__eac_open_folder"         # 保存先フォルダを開く
 BIND_SPA_TOGGLE = "__eac_spa_toggle"           # SPA検知 ON/OFF
 BIND_SET_SELECTOR = "__eac_set_selector"       # セレクタ入力（変更のたび）
 BIND_COMMIT_SELECTOR = "__eac_commit_selector" # セレクタ確定（blur/Enter）
 BIND_SPA_CHANGED = "__eac_spa_changed"         # SPA検知の変化通知
 BIND_GETSTATE = "__eac_getstate"               # 描画前の状態問い合わせ
 
-# --- capture 側が page.evaluate で呼ぶ、ページ側ヘルパの呼び出し式（E-3）---
+# --- capture 側が page.evaluate で呼ぶ、ページ側ヘルパの呼び出し式 ---
 # ヘルパは固定名を window に生やさず、起動ごとのランダム名 ns（new_namespace()）の下へ
 # 1 オブジェクトとしてまとめて公開する（badge.js）。ここではその ns を受け取り、
 # window[ns].applyState(...) 等を呼ぶ式を組み立てる。ns 未公開（未注入や ns 空）でも落ちない
@@ -189,7 +189,7 @@ BIND_GETSTATE = "__eac_getstate"               # 描画前の状態問い合わ�
 
 
 def _ns_ref(ns: str) -> str:
-    """ページ側ヘルパを収めた隠しオブジェクト window[ns] への参照式（E-3）。
+    """ページ側ヘルパを収めた隠しオブジェクト window[ns] への参照式。
 
     ns は new_namespace() 由来のランダム文字列。json.dumps で JS 文字列リテラル化して
     ブラケット参照する（数値始まり等でも安全）。
@@ -230,7 +230,7 @@ def body_text_call(ns: str) -> str:
 def sig_call(ns: str) -> str:
     """SPA検知の署名。引数 sel を受け取る関数式（page.evaluate(sig_call(ns), selector) で使う）。
 
-    **本番経路では未使用。** SPA検知の署名計算は B-1 / B-2 でページ側（badge.js の
+    **本番経路では未使用。** SPA検知の署名計算はページ側（badge.js の
     MutationObserver + デバウンス）へ移り、Python が毎tick 署名を評価するポーリングは
     廃止された。これはその名残で、現在の呼び出し元は tests/smoke_badge.py の 1 箇所だけ
     （window[ns] 越しに signature が呼べるかというページ側ヘルパの疎通確認）。
@@ -253,7 +253,7 @@ def capture_start_call(ns: str) -> str:
 
 
 def capture_end_call(ns: str, ok: bool) -> str:
-    """撮影直後の captureEnd 呼び出し式を組み立てる（F-D3）。
+    """撮影直後の captureEnd 呼び出し式を組み立てる。
 
     ok は `_capture` の done 有無（1 種でも保存できたか）。ページ側の captureEnd へ真偽値で
     渡し、成功（赤）と失敗（琥珀）でシャッターフラッシュの色を分ける。
@@ -273,7 +273,7 @@ def apply_state_call(ns: str, recording: bool, spa_on: bool, selector: str) -> s
 
 
 def set_count_call(ns: str, count: int) -> str:
-    """撮影カウンタ（本セッション枚数）をバーへ反映する呼び出し式を組み立てる（F-D3）。
+    """撮影カウンタ（本セッション枚数）をバーへ反映する呼び出し式を組み立てる。
 
     枚数は Python 側（監視セッション）が本体として持ち、成功のたびに全ページのバーへ配る。
     バーがサイト側の再描画で作り直されても __eac_getstate（count 同梱）で自己同期する。
@@ -282,7 +282,7 @@ def set_count_call(ns: str, count: int) -> str:
 
 
 def set_history_call(ns: str, history: list[str]) -> str:
-    """セレクタ候補（datalist の過去値）をバーへ反映する呼び出し式を組み立てる（F-D2）。
+    """セレクタ候補（datalist の過去値）をバーへ反映する呼び出し式を組み立てる。
 
     候補は Python 側（監視セッション）が本体として持ち、セレクタ確定（blur/Enter）のたびに
     全ページのバーへ配る。バーがサイト側の再描画で作り直されても __eac_getstate（history

@@ -1,7 +1,6 @@
 """基盤ユーティリティ（infra.py）のユニットテスト。
 
-バージョンの出所（D-B1）・起動環境ログ（D-B2）・書き込み先の退避（D-C1）・
-多重起動抑止（D-C4）を守る。Playwright 非依存なので実 Edge 不要。
+バージョンの出所・起動環境ログ・書き込み先の退避・多重起動抑止を守る。Playwright 非依存なので実 Edge 不要。
 
 実行:
     pip install -e ".[dev]"
@@ -17,7 +16,7 @@ import pytest
 from edge_auto_capture import infra
 
 # --------------------------------------------------------------------------- #
-# バージョン（D-B1: 出所を infra.__version__ に一本化する）
+# バージョン（出所を infra.__version__ に一本化する）
 # --------------------------------------------------------------------------- #
 
 
@@ -28,7 +27,7 @@ def test_infra_version_is_semverish():
 
 def test_pyproject_sources_version_from_infra():
     # pyproject はバージョンを直書きせず infra.__version__ を参照すること。
-    # 直書きに戻すと二重管理になり「片方だけ上げる」事故が起きる（D-B1）。
+    # 直書きに戻すと二重管理になり「片方だけ上げる」事故が起きる。
     root = Path(__file__).resolve().parent.parent
     text = (root / "pyproject.toml").read_text(encoding="utf-8")
     assert re.search(r'dynamic\s*=\s*\[\s*"version"\s*\]', text)
@@ -60,7 +59,7 @@ def test_base_dir_frozen_returns_executable_parent(monkeypatch, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# 環境情報の起動ログ（D-B2: 切り分けのため OS/採用設定値を1行ずつ残す）
+# 環境情報の起動ログ（切り分けのため OS/採用設定値を1行ずつ残す）
 # --------------------------------------------------------------------------- #
 
 
@@ -91,7 +90,7 @@ def test_ms3_zero_pads_to_three_digits():
 
 
 # --------------------------------------------------------------------------- #
-# resolve_writable_dir（D-C1: 書き込み不可の場所で無言終了しない）
+# resolve_writable_dir（書き込み不可の場所で無言終了しない）
 # --------------------------------------------------------------------------- #
 
 
@@ -164,7 +163,7 @@ def test_cleanup_old_profiles_removes_edge_debug_dirs(monkeypatch, tmp_path):
 
 
 def test_cleanup_old_profiles_keeps_excluded_dir(monkeypatch, tmp_path):
-    # keep で渡した永続プロファイルは、名前が edge-debug-* に一致しても消さない（A-5 衝突回避）。
+    # keep で渡した永続プロファイルは、名前が edge-debug-* に一致しても消さない（同時起動の衝突回避）。
     monkeypatch.setattr(infra.tempfile, "gettempdir", lambda: str(tmp_path))
     keep = tmp_path / "edge-debug-keep"
     other = tmp_path / "edge-debug-other"
@@ -182,7 +181,7 @@ def test_cleanup_old_profiles_keeps_excluded_dir(monkeypatch, tmp_path):
 
 
 def test_cleanup_old_profiles_removes_only_old_dirs(monkeypatch, tmp_path):
-    # A-5: 新しい（別インスタンス使用中かもしれない）プロファイルは残し、
+    # 新しい（別インスタンス使用中かもしれない）プロファイルは残し、
     # 十分古いものだけを掃除する。
     monkeypatch.setattr(infra.tempfile, "gettempdir", lambda: str(tmp_path))
     import os as _os
@@ -209,7 +208,7 @@ def test_cleanup_old_profiles_removes_fresh_when_age_zero(monkeypatch, tmp_path)
 
 
 # --------------------------------------------------------------------------- #
-# 多重起動抑止（D-C4）: アプリ全体で 1 プロセスだけ起動を許すファイルロック。
+# 多重起動抑止: アプリ全体で 1 プロセスだけ起動を許すファイルロック。
 # 実プロセスは起こさず、ロックファイルの排他制御そのものをユニットで検証する。
 # --------------------------------------------------------------------------- #
 

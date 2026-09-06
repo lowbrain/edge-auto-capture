@@ -1,4 +1,4 @@
-"""E-4（ダウンロード消失）の回帰テスト。
+"""ダウンロード消失の回帰テスト。
 
 Playwright は既定でダウンロードを一時領域に受け、コンテキストを閉じる際に削除する。
 accept_downloads / downloads_path を指定しても削除されるため（実機で確認済）、
@@ -77,10 +77,10 @@ def test_on_download_saves_with_suggested_name(tmp_path):
     dd = _downloads_dir(Config(output_dir=tmp_path))
     dd.mkdir(parents=True, exist_ok=True)
     s = _session(tmp_path)
-    asyncio.run(s.on_download(FakeDownload("hello.txt", "Hello, E-4!")))
+    asyncio.run(s.on_download(FakeDownload("hello.txt", "Hello, download!")))
     saved = dd / "hello.txt"
     assert saved.exists()
-    assert saved.read_text(encoding="utf-8") == "Hello, E-4!"
+    assert saved.read_text(encoding="utf-8") == "Hello, download!"
 
 
 def test_on_download_does_not_overwrite_same_name(tmp_path):

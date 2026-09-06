@@ -5,7 +5,7 @@ CONTRIBUTING §1-5 が「バインディング名は 2 箇所に存在し、片�
 警告はあったが、忘れたことを検出する仕組みが無かった。
 
 - badge.py の BIND_* 定数群（Python → expose_binding で公開する名前）
-- badge.js の BINDING_NAMES 配列（ページ側で BOUND へ退避し、E-3 のため window から消す名前）
+- badge.js の BINDING_NAMES 配列（ページ側で BOUND へ退避し、存在検知の防止のため window から消す名前）
 
 この 2 つは 1:1 で一致していなければならない。ずれても例外もログも出ず、
 操作バーのボタンが黙って効かなくなるだけなので、ここで縛る。

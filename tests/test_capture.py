@@ -1,8 +1,8 @@
 """1 ページ分の保存処理（capture.py）のユニットテスト。
 
-ファイル名スラッグ（safe_name / page_label）・保存ステップの集約（_step, A-3）・
-ページ側 JS のハング保護（try_eval, E-6）・撮影キューの合流（B-3）・撮影要求
-（CaptureRequest）・索引 CSV（F-A1 / F-A4）を守る。実 Edge 不要。
+ファイル名スラッグ（safe_name / page_label）・保存ステップの集約（_step）・
+ページ側 JS のハング保護（try_eval）・撮影キューの合流・撮影要求
+（CaptureRequest）・索引 CSV を守る。実 Edge 不要。
 
 実行:
     pip install -e ".[dev]"
@@ -93,7 +93,7 @@ def test_now_stamp_formats_current_time_to_milliseconds(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# _step（A-3: 全失敗でも [saved] と出さないための done 集約）
+# _step（全失敗でも [saved] と出さないための done 集約）
 # --------------------------------------------------------------------------- #
 
 
@@ -118,7 +118,7 @@ def test_step_without_done_still_swallows_exception():
 
 
 # --------------------------------------------------------------------------- #
-# try_eval のハング保護（E-6: 返ってこない evaluate で worker を止めない）
+# try_eval のハング保護（返ってこない evaluate で worker を止めない）
 # --------------------------------------------------------------------------- #
 
 
@@ -175,7 +175,7 @@ def test_page_label_whitespace_title_uses_url():
 
 
 # --------------------------------------------------------------------------- #
-# CaptureRunner の合流（B-3: 撮影キュー無制限の防止）
+# CaptureRunner の合流（撮影キュー無制限の防止）
 #
 # spawn は「ページごとに実行中1件＋保留1件（最新で置き換え）」に合流させる。
 # 実 Edge を使わず、_capture をスタブ化して「実際に何件・どの params で走ったか」だけを
@@ -294,7 +294,7 @@ def test_spawn_restarts_worker_after_drain():
 # CaptureRequest（撮影 1 回分の要求オブジェクト）
 #
 # spawn→_pending→_worker→_capture を貫通する位置引数タプルを 1 オブジェクトへ集約した器。
-# 既定値と、要求が _capture まで欠けずに届くこと（R1 の配線）を回帰から守る。
+# 既定値と、要求が _capture まで欠けずに届くことを回帰から守る。
 # --------------------------------------------------------------------------- #
 
 
@@ -350,7 +350,7 @@ def test_spawn_delivers_request_to_capture_unchanged():
 
 
 # --------------------------------------------------------------------------- #
-# 索引 CSV（F-A1）+ 撮影時刻（F-A4）
+# 索引 CSV + 撮影時刻
 #
 # 撮影ごとに output_dir/index.csv へ 1 行追記する。地雷 2 つ（BOM 付き utf-8-sig で書く／
 # 時刻は ISO 8601 オフセット付き）と、追記時に BOM・見出しを重複させないことを回帰から守る。
@@ -358,7 +358,7 @@ def test_spawn_delivers_request_to_capture_unchanged():
 
 
 def test_iso_timestamp_is_offset_aware_iso8601():
-    # F-A4: ISO 8601・ミリ秒・UTC オフセット付き（例: 2026-08-11T14:30:25.123+09:00）。
+    # ISO 8601・ミリ秒・UTC オフセット付き（例: 2026-08-11T14:30:25.123+09:00）。
     ts = infra.iso_timestamp()
     from datetime import datetime
 
