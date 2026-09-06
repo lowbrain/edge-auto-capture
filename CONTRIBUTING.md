@@ -128,10 +128,48 @@
 | `infra._message_box` | Windows は `ctypes.windll`、macOS は `osascript`（開発機での確認用に分岐追加済み） |
 | `build.ps1` | PowerShell / Windows 専用。macOS では実行検証できない |
 | `%LOCALAPPDATA%` | 書き込み不可時の退避先。macOS には存在せず `tempfile.gettempdir()` へフォールバック |
+| バイトコードキャッシュ | Apple 版 python は `__pycache__` を作らず `~/Library/Caches/com.apple.python/` へ退避する。**壊れたコードで `pytest` が緑になる罠がある**（下記） |
 
 **両 OS でカバレッジが相補的**な点に注意。Windows では `test_resolve_writable_dir_*` 2 件
 （書き込み不可時の退避ロジック）が POSIX chmod の効かなさゆえ self-skip され、macOS では実行されて通る。
 片方の OS だけで「全部通った」と判断しないこと。
+
+### macOS: 古いバイトコードで `pytest` が偽の緑を出す
+
+**発火条件は「同じバイト長の書き換えを同一秒内に行う」の 1 点。** Python の `.pyc` は
+「ソースの mtime（秒）とサイズ」で有効性を判定するので、**両方とも変わらない書き換えは
+古いバイトコードのまま走る**。実際にこれで、壊した `app.py` に対し `pytest` が
+`202 passed` と緑を出した（正しくは 4 件 FAIL）。
+
+手で書くぶんには長さがまず変わるので踏まない。**踏むのは `sed` などで同じ長さの識別子を
+入れ替えたときと、「わざと壊して FAIL することを確かめる」検証**で、後者はこのリポジトリで
+実際にやる作業なので当たる。
+
+厄介なのは置き場所で、この機の `.venv` は Apple の Command Line Tools 同梱 python3 を
+土台にしており、`sys.pycache_prefix` が設定されている。**`.pyc` はリポジトリ内ではなく
+`~/Library/Caches/com.apple.python/<リポジトリの絶対パス>/` に置かれる**ため、
+`find . -name __pycache__ -delete` では消えない（そもそもリポジトリ内に作られない）。
+
+自分の環境が該当するかは次で分かる（空文字なら無関係）:
+
+```bash
+python -c "import sys; print(sys.pycache_prefix)"
+```
+
+**対処は「走らせる前にリポジトリぶんのキャッシュを消す」。**
+
+```bash
+rm -rf ~/Library/Caches/com.apple.python"$PWD" && pytest
+```
+
+以下は**効かない**ので注意（いずれも実測で確認済み）:
+
+| やりがちなこと | 結果 |
+|---|---|
+| `find . -name __pycache__ -delete` | **無効**。リポジトリ内に `__pycache__` は作られない |
+| 途中から `python -B` に切り替える | **無効**。`-B` は「書かない」だけで、既にあるキャッシュは読む |
+| `PYTHONPYCACHEPREFIX=` （空）を渡す | **無効**。空は未設定扱いになり Apple の既定が残る |
+| 最初からずっと `python -B` | 有効。ただしキャッシュが空の状態から徹底する必要がある |
 
 ---
 
