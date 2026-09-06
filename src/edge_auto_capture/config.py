@@ -31,7 +31,7 @@ class ConfigFatalError(Exception):
     コードの決定は入口（edge_auto_capture.cli）の 1 か所に集める。
     """
 
-# 自己修復（D-C3）で書き出す既定 config.ini の中身。配布する config.ini と同一
+# 自己修復で書き出す既定 config.ini の中身。配布する config.ini と同一
 # （drift はテスト test_default_config_text_matches_bundled_ini で担保する）。
 # 削除・破損しても notify_fatal→exit で起動不能にせず、これで作り直して既定値で起動する。
 # 改行は LF で持ち、write_text がプラットフォームの改行へ変換する（Windows なら CRLF）。
@@ -141,11 +141,11 @@ class Config:
     output_dir: Path = Path("output")       # 保存先フォルダ（png / txt / log.txt もここ）
     settle_delay: float = 0.8               # 変化検知後、描画が落ち着くまで待つ秒数
     load_timeout: int = 5000                # ページ読み込み待ちの上限（ミリ秒）
-    eval_timeout: int = 5000                # ページ側 JS 実行（本文取得・撮影合図）の上限（ミリ秒。E-6）
-    skip_urls: tuple[str, ...] = ("about:blank", "")   # 撮らないURL（前方一致/fnmatch。B-5）
-    allow_urls: tuple[str, ...] = ()        # 指定時はこれに合致する URL だけ撮る（他は全スキップ。F-C2）
+    eval_timeout: int = 5000                # ページ側 JS 実行（本文取得・撮影合図）の上限（ミリ秒）
+    skip_urls: tuple[str, ...] = ("about:blank", "")   # 撮らないURL（前方一致/fnmatch）
+    allow_urls: tuple[str, ...] = ()        # 指定時はこれに合致する URL だけ撮る（他は全スキップ）
     target_selector: str = ""               # 一部抜き出しの CSS セレクタ（空ならスキップ）
-    hide_selectors: tuple[str, ...] = ()    # 撮影中だけ隠す CSS セレクタ（空なら何も隠さない。F-B2）
+    hide_selectors: tuple[str, ...] = ()    # 撮影中だけ隠す CSS セレクタ（空なら何も隠さない）
     start_recording: bool = False           # 起動直後に記録を開始するか（False=待機状態で起動）
     profile_dir: str = ""                    # 再利用するブラウザプロファイルの場所（空なら毎回使い捨て）
 
@@ -162,7 +162,7 @@ class Config:
 
 
 def session_stamp() -> str:
-    """起動 1 回分（セッション）の保存先サブフォルダ名を返す（F-C3）。
+    """起動 1 回分（セッション）の保存先サブフォルダ名を返す。
 
     起動時刻を「YYYY-MM-DD_HHMMSS」で表す（例: 2026-08-11_143025）。output_dir の直下に
     この 1 段を挟むことで、撮影物・log.txt・index.csv・lineage-<id>/downloads がすべて
@@ -174,7 +174,7 @@ def session_stamp() -> str:
 
 
 def _url_matches(url: str, pattern: str) -> bool:
-    """URL が 1 つのパターンに合致するか（B-5）。
+    """URL が 1 つのパターンに合致するか。
 
     ワイルドカード（`*` `?` `[`）を含むパターンは fnmatch で判定し、
     含まないパターンは前方一致で判定する（`https://skip.me` が
@@ -189,11 +189,11 @@ def _url_matches(url: str, pattern: str) -> bool:
 
 
 def should_capture(url: str, config: Config) -> bool:
-    """この URL を撮るべきか（skip_urls / allow_urls の判定を 1 か所に集約。R3）。
+    """この URL を撮るべきか（skip_urls / allow_urls の判定を 1 か所に集約）。
 
-    - allow_urls が指定されていれば、それに合致しない URL はすべてスキップ（ホワイトリスト。F-C2）。
+    - allow_urls が指定されていれば、それに合致しない URL はすべてスキップ（ホワイトリスト）。
     - 次に skip_urls に合致すれば（allow を通っていても）スキップ（ブラックリスト）。
-    どちらのマッチも前方一致 or fnmatch（B-5）。url 取得に失敗した側（None）は
+    どちらのマッチも前方一致 or fnmatch。url 取得に失敗した側（None）は
     呼び出し側で弾く前提で、ここは確定した文字列 url を受ける。
     """
     if config.allow_urls and not any(_url_matches(url, p) for p in config.allow_urls):
@@ -204,7 +204,7 @@ def should_capture(url: str, config: Config) -> bool:
 
 
 def summarize_config(config: Config) -> str:
-    """採用された設定値の要点を1行に整形する（D-B2）。
+    """採用された設定値の要点を1行に整形する。
 
     config.ini の「実際に効いた値」をログへ残す。既定へフォールバックしたのか、
     自動検出（空）なのか明示指定なのかが後から分かり、不具合の切り分けが速くなる
@@ -236,7 +236,7 @@ def summarize_config(config: Config) -> str:
 
 
 def _write_default_config() -> bool:
-    """既定の config.ini を CONFIG_PATH へ書き出す（自己修復。D-C3）。
+    """既定の config.ini を CONFIG_PATH へ書き出す（自己修復）。
 
     書けたら True。読み取り専用の場所などで書けなくても例外は投げず False を返し、
     呼び出し側がメモリ上の既定値で起動できるようにする（起動不能にしない）。
@@ -274,7 +274,7 @@ def _build_config(sec: configparser.SectionProxy, defaults: Config) -> Config:
     """[capture] セクションから Config を組み立てる（値の検証・既定フォールバック込み）。
 
     値の変換・検証だけを行い、ファイルアクセスやログ切り替え等の副作用は持たない
-    （R5b: 副作用の分離）。数値項目の変換・範囲チェックに失敗すると ValueError を送出する
+    （副作用の分離）。数値項目の変換・範囲チェックに失敗すると ValueError を送出する
     （呼び出し側が「値の編集ミス」として通知し終了する）。output_dir は config.ini で指定された
     保存先（相対パスは基準フォルダ基準に固定）をそのまま載せる。書き込み可否の解決・
     セッション階層の挿入・set_log_dir といった副作用は _resolve_output_dir が担い、
@@ -303,11 +303,11 @@ def _build_config(sec: configparser.SectionProxy, defaults: Config) -> Config:
     # 撮らない URL。空URLは常にスキップ対象へ含める（下の Config で ("",) を足す）。
     skips = _csv_tuple(sec, "skip_urls")
 
-    # 撮る URL を明示的に絞るホワイトリスト（指定時は他を全スキップ。F-C2）。
+    # 撮る URL を明示的に絞るホワイトリスト（指定時は他を全スキップ）。
     # 空なら無効（従来どおり skip_urls だけで判定）。
     allows = _csv_tuple(sec, "allow_urls")
 
-    # 撮影中だけ隠すセレクタ（F-B2）。
+    # 撮影中だけ隠すセレクタ。
     hides = _csv_tuple(sec, "hide_selectors")
 
     # 再利用プロファイルの場所。空なら毎回使い捨て（既定の挙動を据え置く）。
@@ -339,17 +339,17 @@ def _build_config(sec: configparser.SectionProxy, defaults: Config) -> Config:
 def _resolve_output_dir(config: Config) -> Config:
     """保存先の書き込み可否を解決し、セッション階層を挟んで output_dir を確定させる。
 
-    _build_config（純粋な値組み立て）から分離した副作用側（R5b）。組み立て済みの Config を
+    _build_config（純粋な値組み立て）から分離した副作用側。組み立て済みの Config を
     受け取り、以下を行って output_dir 差し替え済みの Config を返す:
-      - 書き込み可能なフォルダへの解決と %LOCALAPPDATA% 等への退避（D-C1）。
+      - 書き込み可能なフォルダへの解決と %LOCALAPPDATA% 等への退避。
         どこにも書けなければ ConfigFatalError（通知と終了は入口が決める。#49）。
-      - 起動 1 回分のセッションフォルダの挿入（F-C3）。
+      - 起動 1 回分のセッションフォルダの挿入。
       - ログ出力先をその保存先へ切り替え（set_log_dir）。
       - 退避が起きた場合の通知。
     """
     output_dir = config.output_dir
 
-    # 書き込み可能なフォルダへ解決する（D-C1）。権限の無い場所へ展開されても
+    # 書き込み可能なフォルダへ解決する。権限の無い場所へ展開されても
     # 無言終了せず、%LOCALAPPDATA% 等へ退避して動き続ける。どこにも書けなければ終了。
     # （終了そのものは入口の仕事なので、ここでは ConfigFatalError を投げるだけにする）
     resolved = resolve_writable_dir(output_dir)
@@ -360,7 +360,7 @@ def _resolve_output_dir(config: Config) -> Config:
             "書き込み可能な場所（例: ドキュメント配下）へ移して実行してください。"
         )
 
-    # F-C3: 起動 1 回分のセッションフォルダを 1 段挟む（例: output/2026-08-11_143025/）。
+    # 起動 1 回分のセッションフォルダを 1 段挟む（例: output/2026-08-11_143025/）。
     # 撮影物・log.txt・index.csv・lineage-<id>/downloads はすべて output_dir からの相対で
     # 決まるので、ここで output_dir をセッションフォルダにすげ替えるだけで全保存物がその下へ
     # まとまる（起動単位で切り、受け渡しが「このフォルダを渡す」で済む）。書き込み可否の判定と
@@ -389,7 +389,7 @@ def _config_from_section(sec: configparser.SectionProxy, defaults: Config) -> Co
     """[capture] セクションから、保存先まで確定した Config を作る。
 
     値の組み立て（_build_config・純粋）と保存先の解決（_resolve_output_dir・副作用）は
-    R5b で意図的に分けてあるが、使うときは必ずこの順で 2 段を揃える。以前は 3 経路
+    意図的に分けてあるが、使うときは必ずこの順で 2 段を揃える。以前は 3 経路
     （通常読み込み・破損からの復旧・既定テキストからの起動）がそれぞれ同じ 2 段重ねを
     書いていたため、間に処理が増えたときの直し漏れが 3 箇所ぶん起こりえた。組み合わせを
     ここへ 1 本化して、直す場所を 1 つにする。
@@ -410,7 +410,7 @@ def _config_with_defaults(defaults: Config) -> Config:
 
 
 def _recover_broken_config(error: Exception, defaults: Config) -> Config:
-    """破損／[capture] 欠落の config.ini から回復して起動する（自己修復。D-C3）。
+    """破損／[capture] 欠落の config.ini から回復して起動する（自己修復）。
 
     壊れた元ファイルは消さず config.ini.invalid へ退避し（利用者が中身を確認できる）、
     既定 config.ini を書き直して読み直す。書けない/読めない場合は DEFAULT_CONFIG_TEXT の
@@ -449,9 +449,9 @@ def load_config() -> Config:
 
     既定値まわりの挙動（現状仕様）:
       - config.ini が無い                          → 既定 config.ini を書き出し、既定値で
-        起動する（D-C3 自己修復。書けなければメモリ上の既定値で起動）。
+        起動する（自己修復。書けなければメモリ上の既定値で起動）。
       - config.ini が破損／[capture] セクションが無い → 元ファイルを config.ini.invalid へ
-        退避し、既定 config.ini を作り直して起動する（D-C3。ダイアログで通知）。
+        退避し、既定 config.ini を作り直して起動する（ダイアログで通知）。
       - 項目の「行そのものが無い」                 → Config の既定値を使う
         （sec.get / getfloat / getint の第2引数が既定値）。
       - 数値項目の値だけが不正（例: settle_delay =／範囲外）→ ファイル自体は使えるので
@@ -460,7 +460,7 @@ def load_config() -> Config:
         入口（edge_auto_capture.cli）が決める（#49）。保存先がどこにも書けないときも同じ。
       - output_dir の値が空 → 既定値（output）へフォールバックする
         （空だと Path('.') でカレントへ保存してしまう事故を防ぐ）。
-      - 確定した output_dir の直下へ、起動時刻のセッションフォルダを 1 段挟む（F-C3。
+      - 確定した output_dir の直下へ、起動時刻のセッションフォルダを 1 段挟む（
         例: output/2026-08-11_143025/）。以後 log.txt・index.csv・撮影物・
         lineage-<id>/downloads はすべてこのフォルダ配下へまとまる。
       - edge_path / chrome_path が空 → 自動検出（空が正常値）。値があれば
@@ -472,7 +472,7 @@ def load_config() -> Config:
     """
     defaults = Config()
 
-    # D-C3: 失われても起動不能にしない。既定 config.ini を書き出して既定値で起動する。
+    # 失われても起動不能にしない。既定 config.ini を書き出して既定値で起動する。
     if not CONFIG_PATH.exists():
         if _write_default_config():
             log(f"[config] config.ini が無いため既定値で作成しました: {CONFIG_PATH}")
@@ -483,13 +483,13 @@ def load_config() -> Config:
 
     parser = configparser.ConfigParser()
     try:
-        # utf-8-sig: BOM 有無どちらでも読む（A-6）。USAGE.txt が「メモ帳で編集」と
+        # utf-8-sig: BOM 有無どちらでも読む。USAGE.txt が「メモ帳で編集」と
         # 案内しており、メモ帳保存で BOM が混入すると utf-8 では最初のセクション見出しが
         # 壊れ MissingSectionHeaderError になる。BOM を吸収して原因不明の起動失敗を防ぐ。
         parser.read(CONFIG_PATH, encoding="utf-8-sig")
         sec = parser["capture"]
     except (configparser.Error, KeyError) as e:
-        # 破損 or [capture] 欠落＝ファイルとして使えない → 退避して作り直す（D-C3）。
+        # 破損 or [capture] 欠落＝ファイルとして使えない → 退避して作り直す。
         return _recover_broken_config(e, defaults)
 
     try:
