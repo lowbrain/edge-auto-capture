@@ -1,8 +1,13 @@
 // 各ページ上部に出す操作バー（記録状態＋記録開始/停止＋今すぐ1枚＋セレクタ入力＋SPA検知トグル＋透過トグル）
 // のページ側スクリプト。add_init_script でページ遷移・新規タブにも自動適用される。
 //
-// このファイルは badge.py が読み込み、$CONFIG を 1 個の JSON（表示文言などの設定）へ
-// 置換してから add_init_script に渡す。実ファイルなのでエディタ/リンタで構文検査できる。
+// このファイル全体が「設定オブジェクト C を 1 個受け取る関数式」である。badge.py が読み込み、
+// `(<このファイル>)(<設定 JSON>);` の形で呼び出す完成スクリプトを組み立てて add_init_script に
+// 渡す。実ファイルなのでエディタ/リンタで構文検査できる。
+// 以前は設定の目印（ドル記号付きの識別子）を Python 側が単純置換していたため、このファイルでは
+// テンプレートリテラルの `${...}` 補間が使えなかった（その目印と衝突しうるため）。
+// 引数で受け取る形にして、その制約を無くしてある（#99）。**末尾はセミコロン無しの `}` で
+// 終える**こと（badge.py が `(…)(…);` で包むため、ここに `;` があると構文エラーになる）。
 //
 // バーは Shadow DOM の中に作る。サイト側 CSS はシャドウ境界を越えて中の要素に当たらない
 // ため、隔離用の !important を各要素へ付ける必要がなく、見た目は下の <style> 1 枚に集約できる。
@@ -14,7 +19,7 @@
 // 終わったら全画面を赤く一瞬フラッシュ（シャッター確定の合図）し、バーを元位置へ戻す。
 //
 // Python から使う API（固定名を window に生やさない）:
-//   Python→ページのヘルパは、起動ごとのランダム名 NS（$CONFIG の ns）の下へ 1 オブジェクトに
+//   Python→ページのヘルパは、起動ごとのランダム名 NS（設定 C の ns）の下へ 1 オブジェクトに
 //   まとめ、enumerable:false で公開する。固定名が無いのでサイトから存在検知できない。Python は
 //   NS を知っているので window[NS].xxx(...) の形で呼ぶ（badge.py の *_call が式を組み立てる）:
 //   - window[NS].applyState(recording, spaOn, selector) : 見た目を現在状態へ更新
@@ -30,22 +35,21 @@
 //     を呼んで保存を要求する。
 //   - ボタン類は __eac_toggle(tok)/__eac_shot(tok)/__eac_spa_toggle(tok)/
 //     __eac_set_selector(tok,v)/__eac_commit_selector(tok,v) を呼ぶ。
-//     第1引数の tok は合言葉（$CONFIG の tok）。Python 側が照合し、一致しない呼び出しは無視する。
+//     第1引数の tok は合言葉（設定 C の tok）。Python 側が照合し、一致しない呼び出しは無視する。
 //
 // 閲覧中サイトからの干渉・検知に対する防御（3 段構え）:
 //   1. シャドウは mode:'closed'。host.shadowRoot が null になるため、サイト側スクリプトは
 //      バー内部の要素を取得できず、ボタンを click() して記録操作を起こすこともできない。
 //      （open だった頃は、tok を知らなくても UI 経由で記録の開始/停止や連写を起こせた）
-//   2. expose_binding の参照は IIFE 冒頭で退避する（BOUND）。add_init_script はサイトの JS より
+//   2. expose_binding の参照はこの関数の冒頭で退避する（BOUND）。add_init_script はサイトの JS より
 //      先に走るので、ここで掴んだ参照は本物。サイトが window.__eac_toggle を自前関数で包んでも、
 //      利用者のクリックはその関数を通らないため、第1引数の tok を盗まれない。
 //   3. 存在検知の防止: Python→ページのヘルパは固定名でなくランダム名 NS の非列挙プロパティ
 //      へ収め、ページ→Python の expose_binding 固定名は退避後に window から削除する。これにより
 //      `'__eacApplyState' in window` や `'__eac_toggle' in window` のような固定名での検知が効かない。
-(() => {
-  // 表示文言などの設定は Python 側で定義し、$CONFIG（1個の JSON）でまとめて渡す。
-  // 設定と TOK はサブフレームでも先に読む（下の②の掃除に TOK と名前が要るため）。
-  const C = $CONFIG;
+(C) => {
+  // 表示文言などの設定は Python 側で定義し、C（1個の JSON オブジェクト）でまとめて受け取る。
+  // TOK はサブフレームでも先に読む（下の②の掃除に TOK と名前が要るため）。
   // expose_binding（__eac_* 群）を呼ぶときの合言葉。各呼び出しの第1引数に付け、Python 側が
   // 照合する。閲覧中サイトのスクリプトが token を知らずに記録操作・連写・セレクタ書き換えを
   // 行っても Python 側で無視される。起動ごとにランダム生成した値が Python から渡ってくる。
@@ -111,11 +115,13 @@
   }
 
   // --- 撮影演出のタイミング定数（ミリ秒）。ここだけ直せば挙動を調整できる。 ---
-  // 対になる CSS 側の時間（.bar の transition .24s＝240ms、.frame.flash の .5s＝500ms）は
-  // <style> 内にあり、テンプレートリテラルの ${ が $CONFIG 置換と衝突するため差し込めない。
-  // よって CSS 値とは手動で整合を取る（下のコメントに対応関係を明記）。
-  const CAP_FALLBACK_MS = 500;  // captureStart: transitionend が来ない場合の保険（bar transition 240ms を十分に超える上限）
-  const FLASH_CLEAR_MS = 520;   // captureEnd: シャッターフラッシュ(.flash)を消すまで（CSS の .5s=500ms 完了を見込み少し長め）
+  // 対になる CSS 側の時間は、下の <style>（テンプレートリテラル）へ ${...} で差し込む。
+  // かつては設定の目印の単純置換と衝突するため差し込めず、CSS 値と手動で整合を取っていたが、
+  // 設定を引数で受け取る形にして補間が使えるようになった（#99）。**JS の定数が唯一の出所。**
+  const BAR_MOVE_MS = 240;      // バーの退避/復帰アニメーション（CSS: .bar の transition）
+  const FLASH_MS = 500;         // シャッターフラッシュのアニメーション長（CSS: .frame.flash）
+  const CAP_FALLBACK_MS = BAR_MOVE_MS + 260;  // = 500ms。captureStart: transitionend が来ない場合の保険（退避 240ms を十分に超える上限）
+  const FLASH_CLEAR_MS = FLASH_MS + 20;       // = 520ms。captureEnd: シャッターフラッシュ(.flash)を消すまで（CSS の完了を見込み少し長め）
   const BAR_RETURN_MS = 170;    // captureEnd: フラッシュ後にバーを戻すまでの遅延（動きが競合しないよう時間差）
 
   let recording = false;   // 直近に適用された記録状態（再描画時の復元に使う）
@@ -169,8 +175,9 @@
       color:#fff;font-family:"Segoe UI",sans-serif;font-size:13px;font-weight:bold;line-height:1;
       box-shadow:0 2px 8px rgba(0,0,0,.4);background:rgba(90,90,90,.92);
       /* 退避/復帰は同じ transition（＝隠す動きと戻る動きを対称に）。少しゆっくりの ease-out。
-         透過（peek）で背景を消す/戻すのも滑らかに見せるため background も一緒に遷移させる。 */
-      transition:transform .24s cubic-bezier(.22,.61,.36,1),background .18s ease;}
+         透過（peek）で背景を消す/戻すのも滑らかに見せるため background も一緒に遷移させる。
+         時間は上の BAR_MOVE_MS から差し込む（JS の待ち時間と CSS を同じ出所にする）。 */
+      transition:transform ${BAR_MOVE_MS}ms cubic-bezier(.22,.61,.36,1),background .18s ease;}
     .bar.rec{background:rgba(200,0,0,.92);}
     .bar.idle{background:rgba(90,90,90,.92);}
     /* 撮影時: バーを上端の外まで退避（スクショに写らない）。 */
@@ -245,7 +252,8 @@
     /* 保存失敗時のフラッシュ: 成功（赤）と同じ色だと「撮れた」と誤解を招くので、
        警告色の琥珀へ差し替える。発光アニメーション（.flash）は共通で、色だけを変える。 */
     .frame.fail{background:rgba(255,170,0,.12);box-shadow:inset 0 0 90px 14px rgba(255,150,0,.6);}
-    .frame.flash{animation:eac-shutter .5s ease-out;}
+    /* 時間は上の FLASH_MS から差し込む（フラッシュを畳む FLASH_CLEAR_MS と同じ出所）。 */
+    .frame.flash{animation:eac-shutter ${FLASH_MS}ms ease-out;}
     @keyframes eac-shutter{0%{opacity:0;}9%{opacity:1;}100%{opacity:0;}}
     </style>`;
 
@@ -742,4 +750,5 @@
   hookHistory('replaceState');
   window.addEventListener('popstate', onRoute);
   window.addEventListener('hashchange', onRoute);
-})();
+  // 末尾はセミコロン無しの `}` で終える（badge.py が `(…)(<設定 JSON>);` で包んで呼び出す）。
+}

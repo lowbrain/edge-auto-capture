@@ -4,7 +4,8 @@
   エディタ/リンタで構文検査でき、以前の「Python 文字列内 JS の構文エラーが
   実行するまで分からない」問題を避けられる。
 - 表示文言（利用者に見える日本語など）は Python 側で定義し、_BADGE_CONFIG に
-  まとめて 1 個の JSON（badge.js 中の $CONFIG）として渡す。追加時に置換の
+  まとめて 1 個の JSON として渡す。badge.js は設定を 1 個受け取る関数式なので、
+  `(<badge.js>)(<設定 JSON>);` の形で呼び出すだけでよい。追加時に置換の
   引数を並べ直す必要がなく、直し漏れが起きにくい。
 - capture 側が page.evaluate で呼ぶヘルパ（バー隠し/本文取得/保存フラッシュ）の
   呼び出し式もここに集約する。
@@ -75,7 +76,8 @@ _TITLE_SPA = (
     "ON の間は、記録中にその中身が変わるたびに自動保存します。"
 )
 
-# badge.js の $CONFIG へ渡す設定（表示文言）。キー名は badge.js 内の C.* と対応する。
+# badge.js（設定を 1 個受け取る関数式）へ渡す設定（表示文言）。キー名は badge.js 内の
+# C.* と対応する。
 _BADGE_CONFIG = {
     "id": BADGE_ID,
     "sOn": _STATUS_ON,
@@ -128,7 +130,7 @@ def build_badge_script(
     hide_selectors: tuple[str, ...] = (),
     ns: str = "",
 ) -> str:
-    """badge.js を読み込み、$CONFIG を設定 JSON で置換した完成スクリプトを返す。
+    """badge.js を読み込み、設定 JSON を引数に渡して呼び出す完成スクリプトを返す。
 
     token は、ページ側から expose_binding（__eac_* 群）を呼ぶときの「合言葉」。
     badge.js はこの token を各呼び出しの第1引数に付け、Python 側が照合する。閲覧中の
@@ -149,16 +151,18 @@ def build_badge_script(
     まとめる。固定名を window に生やさないので、サイトから固定名で存在検知できなくなる。
     空（既定）のときは公開しない（見た目だけ確認するテスト用ビルドで、ヘルパを呼ばない場面）。
 
-    置換対象は文字列 "$CONFIG" のみ。badge.js はテンプレートリテラル（バッククォート）を
-    使うが、補間は `${...}` の形だけで、この JS では `${` を使わないため `$CONFIG` と
-    衝突しない。よって単純な文字列置換で足りる（絵文字/日本語も json.dumps で
-    \\uXXXX に安全化される）。
+    渡し方は「badge.js 全体を 1 個の関数式として呼び出す」形（#99）。以前は badge.js 中の
+    目印 "$CONFIG" を単純置換していたが、そのせいで badge.js ではテンプレートリテラルの
+    `${...}` 補間が使えなかった（`$CONFIG` と衝突しうるため）。引数で渡す形にすると、
+    設定は JS の値として素直に入り、この制約も消える。固定名を globalThis に載せないので
+    存在検知の防止（CONTRIBUTING §1-6）とも噛み合う。日本語/絵文字は json.dumps が
+    \\uXXXX に安全化する。badge.js の末尾は `}`（セミコロン無し）である前提。
     """
     config = dict(
         _BADGE_CONFIG, tok=token, settleMs=settle_ms, hideSel=list(hide_selectors), ns=ns
     )
     src = _badge_js_path().read_text(encoding="utf-8")
-    return src.replace("$CONFIG", json.dumps(config))
+    return f"({src})({json.dumps(config)});"
 
 
 # 完成済みスクリプト（token 無し）は、以前ここで BADGE_SCRIPT = build_badge_script() として

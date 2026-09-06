@@ -55,6 +55,49 @@ def _py_binding_names() -> set:
 
 
 # --------------------------------------------------------------------------- #
+# 設定の渡し方（#99・CONTRIBUTING §1-1）
+# --------------------------------------------------------------------------- #
+
+
+def test_badge_js_is_a_function_expression_without_trailing_semicolon():
+    """badge.js は「設定を 1 個受け取る関数式」で、末尾は `}`（セミコロン無し）。
+
+    build_badge_script が `(<badge.js>)(<設定 JSON>);` の形で包むので、末尾に `;` が
+    あるだけで構文エラーになる。しかもその失敗はページ側でしか現れず、気づけるのは
+    実ブラウザを起こす smoke だけ（ブラウザ不在なら SKIP）なので、形はここで縛る。
+    """
+    src = _badge_js_source().strip()
+    assert src.endswith("}"), "badge.js の末尾は `}`（セミコロン無し）であること"
+    assert re.search(r"^\(C\)\s*=>\s*\{", src, re.MULTILINE), (
+        "badge.js の本体は `(C) => {` で始まる関数式であること"
+    )
+
+
+def test_badge_js_has_no_config_placeholder():
+    """かつての単純置換の目印（$CONFIG）が残っていないこと（#99 の受入基準）。
+
+    残っていると「置換されない目印」がそのままページへ流れ、参照時に ReferenceError で
+    バーが出なくなる。目印が消えたことで badge.js では `${...}` 補間を使ってよくなった
+    （実際に CSS の時間を JS 定数から差し込んでいる）。
+    """
+    assert "$CONFIG" not in _badge_js_source()
+
+
+def test_build_badge_script_wraps_source_as_a_call():
+    """完成スクリプトが `(<badge.js>)(<設定 JSON>);` の形になっていること。
+
+    設定は JS の引数として入るので、固定名は globalThis に一度も載らない（§1-6）。
+    """
+    script = badge.build_badge_script("tok", 300, ("#x",), "nABC")
+    assert script.startswith("(")
+    assert script.endswith(");")
+    assert _badge_js_source().strip() in script
+    # 設定が JSON リテラルとして末尾の呼び出し引数に載る（値は json.dumps 済み）。
+    assert '"tok": "tok"' in script
+    assert '"ns": "nABC"' in script
+
+
+# --------------------------------------------------------------------------- #
 # BIND_* と BINDING_NAMES の一致（#67・CONTRIBUTING §1-5）
 # --------------------------------------------------------------------------- #
 
