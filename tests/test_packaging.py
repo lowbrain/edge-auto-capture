@@ -9,7 +9,7 @@
 - 同梱データのパス解決（infra.package_data_path）が frozen/非 frozen で正しいこと（#101）
 - USAGE.txt が Shift-JIS として健全であること（#69）
 
-依存は標準ライブラリと本体パッケージだけで完結させる。CI は 3.9 と 3.12 の両方で
+依存は標準ライブラリと本体パッケージだけで完結させる。CI は 3.10 と 3.13 の両方で
 pytest を回すので、tomllib（3.11+）は使えない（pyproject は正規表現で読む）。
 
 実行:
@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # py-modules（トップレベル・モジュール群）時代は package-data が使えず、
 # pip install .（非 editable）で badge.js が wheel に入らず起動不能になっていた
 # （#81・src/ レイアウト化で根治）。ここでは「宣言されていること」と「実在すること」の
-# 2 本で縛る。wheel を実ビルドして中身を見る形の方が強いが、CI の 3.9/3.12 マトリクスで
+# 2 本で縛る。wheel を実ビルドして中身を見る形の方が強いが、CI の 3.10/3.13 マトリクスで
 # 毎回回すには重いので、まずは宣言テストから始める。
 
 
@@ -87,7 +87,7 @@ def test_build_ps1_bundles_both_package_data_files():
 # 同梱データのパス解決（infra.package_data_path・#101）
 # --------------------------------------------------------------------------- #
 # badge.js と default_config.ini は同じ解決規則（frozen なら sys._MEIPASS、通常実行なら
-# パッケージフォルダ）で読む。BASE_DIR（非 frozen では cwd・CONTRIBUTING §1-11）とは
+# パッケージフォルダ）で読む。BASE_DIR（非 frozen では cwd・CONTRIBUTING §1-10）とは
 # 別物で、取り違えると「開発中は動くが exe だけ壊れる」形になる。
 
 

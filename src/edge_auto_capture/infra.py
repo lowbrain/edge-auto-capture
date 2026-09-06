@@ -18,7 +18,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import IO, Any, Optional
+from typing import IO, Any
 
 # バージョンの単一の出所。pyproject.toml は
 # [tool.setuptools.dynamic] version = {attr = "infra.__version__"} でここを参照する。
@@ -58,7 +58,7 @@ def package_data_path(name: str) -> Path:
 
     **BASE_DIR（_base_dir）とは別物**なので取り違えないこと。BASE_DIR は「利用者が
     編集する config.ini や output\\ の置き場所」で、非 frozen ではカレントディレクトリ
-    （#81・CONTRIBUTING §1-11）。こちらは「コードと一緒に配られる読み取り専用データ」の
+    （#81・CONTRIBUTING §1-10）。こちらは「コードと一緒に配られる読み取り専用データ」の
     場所で、非 frozen ではパッケージフォルダ（`Path(__file__).parent`）。同じ frozen 判定を
     2 つの意味で使うため、片方の理屈でもう片方を「直す」と静かに壊れる。
 
@@ -78,7 +78,7 @@ def package_data_path(name: str) -> Path:
 LOG_PATH = BASE_DIR / "log.txt"
 
 
-def resolve_writable_dir(preferred: Path) -> Optional[Path]:
+def resolve_writable_dir(preferred: Path) -> Path | None:
     """書き込み可能なフォルダを返す。preferred が使えなければ退避先を試す。
 
     第三者が exe を C:\\Program Files\\ など書き込み権限の無い場所へ展開した場合、
@@ -274,7 +274,7 @@ _PROFILE_STALE_AGE_SECONDS = 3 * 60 * 60  # 3 時間
 
 
 def cleanup_old_profiles(
-    keep: Optional[Path] = None,
+    keep: Path | None = None,
     min_age_seconds: float = _PROFILE_STALE_AGE_SECONDS,
 ) -> None:
     """前回までに残った一時プロファイル（edge-debug-*）を掃除する。

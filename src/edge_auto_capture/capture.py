@@ -20,7 +20,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from playwright.async_api import Page
 
@@ -57,7 +56,7 @@ def now_stamp() -> str:
     return f"{now:%Y-%m-%d_%H-%M-%S}-{ms3(now)}"
 
 
-async def try_eval(page: Page, js: str, timeout: Optional[float] = None) -> None:
+async def try_eval(page: Page, js: str, timeout: float | None = None) -> None:
     """ページ側 JS を実行。失敗しても無視する（操作バーの表示/非表示など副次処理用）。
 
     timeout（秒）を渡すと、その時間内に返らなければ諦める（ページのメインスレッドが
@@ -97,7 +96,7 @@ def page_label(title: str, url: str) -> str:
 
 
 @contextmanager
-def _step(tag: str, url: str, done: Optional[list[str]] = None) -> Iterator[None]:
+def _step(tag: str, url: str, done: list[str] | None = None) -> Iterator[None]:
     """保存処理 1 ステップ分の共通ラッパ。
 
     例外が出ても [skip <tag>] を表示して握り、他ステップの続行を妨げない。
@@ -154,7 +153,7 @@ class CaptureRunner:
         # 撮影 1 回が終わるたびに成否（done 有無）を通知するコールバック。
         # 監視セッション（CaptureSession）が撮影カウンタの本体を持つため、ここで結果だけを渡す。
         # 既定は None（撮影実行器を単体で使うテストや、通知が要らない場面では何もしない）。
-        self.on_result: Optional[Callable[[bool], Awaitable[None]]] = None
+        self.on_result: Callable[[bool], Awaitable[None]] | None = None
 
         # Python→ページのヘルパ（captureStart/captureEnd/bodyText）を収める window プロパティ名。
         # 監視セッション（CaptureSession）が起動ごとのランダム名を生成し、ここへ配る。空（既定）は

@@ -71,7 +71,7 @@ POSIX chmod の効かなさゆえ self-skip するのが期待値 — CONTRIBUTI
 - **`notify_fatal` の実表示** — `config.ini` を意図的に壊す（存在しない `output_dir` の
   親を読み取り専用にする、数値項目に文字列を入れる 等）か、書き込み不可な場所を指定して、
   Windows のメッセージボックス（`MB_ICONERROR`）が実際に出ること。`infra._message_box_windows`
-  は `ctypes.windll` 経由で、これは Windows でしか通らない（CONTRIBUTING §1-9）
+  は `ctypes.windll` 経由で、これは Windows でしか通らない（CONTRIBUTING §1-8）
 - **終了コード** — 上の失敗時に `echo %ERRORLEVEL%`（PowerShell なら `$LASTEXITCODE`）が
   非0であること。致命エラーは `cli()` の戻り値だけで外へ伝わる設計（`__main__` は
   `sys.exit(cli())` の 1 行）なので、ここが 0 だとダイアログを出して落ちたのに

@@ -32,11 +32,11 @@ Claude Code 向けの**導線**。ここは内容の出所ではない。
 |---|---|---|
 | `badge.js` / `badge.py`（`src/edge_auto_capture/` 配下） | §1-1, §1-5, §1-6 | 言語境界。`$CONFIG` 単純置換・バインディング名の二重管理・`closed` シャドウ・固定名禁止 |
 | `USAGE.txt` | §1-4 | Shift-JIS。往復変換で確認する |
-| 型注釈 | §1-2, §1-8 | Python 3.9+。`X \| Y` 記法は使わない。mypy の 3.10 設定は意図的 |
+| 型注釈 | §1-2 | Python 3.10+。`X \| Y` を書いてよい |
 | 例外処理まわり | §1-3 | 握り潰しは意図的な設計。消す方向の一括リファクタをしない |
-| 関数の移動・リファクタ | §1-10 | 日本語コメントは落とし穴回避の記録。削らない・要約しない |
-| `infra._message_box_windows` | §1-9 | `ctypes.windll` は `Any` 経由が正 |
-| `infra._base_dir` / `BASE_DIR` | §1-11 | 非 frozen 実行の基準は cwd。パッケージフォルダではない |
+| 関数の移動・リファクタ | §1-9 | コメントに残すのは罠。経緯は git へ返す（判定基準は §1-9） |
+| `infra._message_box_windows` | §1-8 | `ctypes.windll` は `Any` 経由が正 |
+| `infra._base_dir` / `BASE_DIR` | §1-10 | 非 frozen 実行の基準は cwd。パッケージフォルダではない |
 
 ## 検証
 

@@ -53,7 +53,7 @@ import tempfile
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Optional
+from typing import Any
 
 from playwright.async_api import (
     BrowserContext,
@@ -100,7 +100,7 @@ def _url_key(url: str) -> str:
     return url.split("#", 1)[0]
 
 
-def _page_url(page: Page) -> Optional[str]:
+def _page_url(page: Page) -> str | None:
     """ページの現在 URL を安全に読む。取れなければ None を返す。
 
     Playwright の Page.url は、ページ／コンテキストが既に閉じられていると例外を投げる。
@@ -278,7 +278,7 @@ class CaptureSession:
         """root を共有する現存ページ（＝同じグループのページ）を返す。"""
         return [pg for pg in self.context.pages if self.page_root.get(pg) is root]
 
-    def _shoot(self, pg: Page, grp: "GroupState", trigger: str) -> Optional[str]:
+    def _shoot(self, pg: Page, grp: "GroupState", trigger: str) -> str | None:
         """1ページを撮る。url 取得失敗と撮影対象外 URL を弾き、撮れば url を返す（弾けば None）。
 
         「url 取得 → 撮影可否判定 → runner.spawn」の定型を1か所に集約する（各コールバックと監視
@@ -647,7 +647,7 @@ def _prepare_profile_dir(config: Config) -> tuple[str, bool]:
 
 async def _launch_browser(
     p: Playwright, config: Config, user_data_dir: str
-) -> Optional[BrowserContext]:
+) -> BrowserContext | None:
     """候補ブラウザを優先順に試して persistent context を返す。全滅なら通知して None を返す。
 
     候補は browser.browser_candidates が決める（config.browser 指定があればその 1 つだけ、
