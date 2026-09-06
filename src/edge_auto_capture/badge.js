@@ -29,12 +29,14 @@
 //   - window[NS].captureEnd(ok)                          : シャッターフラッシュ（ok=成功は赤/失敗は琥珀）＋バー復帰（撮影直後）
 //   - window[NS].bodyText()                              : バー除外の本文 innerText
 //   - window[NS].signature(selector)                    : コンテンツ署名（スモークテスト用）
-//   ページ→Python は expose_binding（下記）。呼び出し名は BOUND へ退避後に window から消す:
-//   - __eac_getstate(tok)         : 描画前に現在状態を取得（枚数 count も含む）
-//   - SPA検知はページ側がイベント駆動で行い、落ち着いた変化を検知したら __eac_spa_changed(tok, sig)
-//     を呼んで保存を要求する。
-//   - ボタン類は __eac_toggle(tok)/__eac_shot(tok)/__eac_spa_toggle(tok)/
-//     __eac_set_selector(tok,v)/__eac_commit_selector(tok,v) を呼ぶ。
+//   ページ→Python は expose_binding。**その名前はこの JS には書かれておらず、設定 C の bind
+//   （badge.py の BIND_* が唯一の出所）から受け取る**（#100）。呼び出しは常に
+//   callBinding(C.bind.<キー>, tok, …) の形で、参照は BOUND へ退避後に window から消す:
+//   - C.bind.getState(tok)        : 描画前に現在状態を取得（枚数 count も含む）
+//   - SPA検知はページ側がイベント駆動で行い、落ち着いた変化を検知したら
+//     C.bind.spaChanged(tok, sig) を呼んで保存を要求する。
+//   - ボタン類は C.bind.toggle(tok)/C.bind.shot(tok)/C.bind.openFolder(tok)/
+//     C.bind.spaToggle(tok)/C.bind.setSelector(tok,v)/C.bind.commitSelector(tok,v) を呼ぶ。
 //     第1引数の tok は合言葉（設定 C の tok）。Python 側が照合し、一致しない呼び出しは無視する。
 //
 // 閲覧中サイトからの干渉・検知に対する防御（3 段構え）:
@@ -42,15 +44,16 @@
 //      バー内部の要素を取得できず、ボタンを click() して記録操作を起こすこともできない。
 //      （open だった頃は、tok を知らなくても UI 経由で記録の開始/停止や連写を起こせた）
 //   2. expose_binding の参照はこの関数の冒頭で退避する（BOUND）。add_init_script はサイトの JS より
-//      先に走るので、ここで掴んだ参照は本物。サイトが window.__eac_toggle を自前関数で包んでも、
+//      先に走るので、ここで掴んだ参照は本物。サイトがバインディングの固定名を自前関数で包んでも、
 //      利用者のクリックはその関数を通らないため、第1引数の tok を盗まれない。
 //   3. 存在検知の防止: Python→ページのヘルパは固定名でなくランダム名 NS の非列挙プロパティ
 //      へ収め、ページ→Python の expose_binding 固定名は退避後に window から削除する。これにより
-//      `'__eacApplyState' in window` や `'__eac_toggle' in window` のような固定名での検知が効かない。
+//      `'__eacApplyState' in window` のような固定名での検知が効かない（バインディング側の
+//      固定名も同様。名前は badge.py の BIND_* にあり、この JS には書かれていない）。
 (C) => {
   // 表示文言などの設定は Python 側で定義し、C（1個の JSON オブジェクト）でまとめて受け取る。
-  // TOK はサブフレームでも先に読む（下の②の掃除に TOK と名前が要るため）。
-  // expose_binding（__eac_* 群）を呼ぶときの合言葉。各呼び出しの第1引数に付け、Python 側が
+  // TOK と C.bind（バインディング名）はサブフレームでも先に読む（下の②の掃除に要るため）。
+  // expose_binding を呼ぶときの合言葉。各呼び出しの第1引数に付け、Python 側が
   // 照合する。閲覧中サイトのスクリプトが token を知らずに記録操作・連写・セレクタ書き換えを
   // 行っても Python 側で無視される。起動ごとにランダム生成した値が Python から渡ってくる。
   const TOK = C.tok || "";
@@ -58,22 +61,22 @@
   // --- expose_binding（Python 側の呼び出し口）の参照を退避し、固定名を window から消す ---
   // add_init_script はサイトの JS より先に実行されるため、ここで掴んだ参照は「本物」である。
   // (1) 参照の退避（BOUND）: これをしないと、サイト側が
-  //       const orig = window.__eac_toggle;
-  //       window.__eac_toggle = (t) => { stolen = t; return orig(t); };
+  //       const orig = window[<バインディング名>];
+  //       window[<バインディング名>] = (t) => { stolen = t; return orig(t); };
   //     のように包んでおくだけで、利用者がボタンを押した瞬間に合言葉（TOK）を盗める。
   //     盗まれれば token 照合は無意味になり、以後は自由に記録操作・連写ができてしまう。
-  // (2) 固定名の削除: expose_binding は全フレームの window に固定名（__eac_toggle 等）で
-  //     生えるため、サイトは `'__eac_toggle' in window` でツールの存在を検知できてしまう。
+  // (2) 固定名の削除: expose_binding は全フレームの window に固定名で生えるため、サイトは
+  //     `'<バインディング名>' in window` でツールの存在を検知できてしまう。
   //     本物の参照を BOUND へ退避したうえで window 上の固定名を消す。以後の呼び出しは BOUND を
   //     使う（callBinding）ので機能は保たれ、サイト JS が動き出す前には固定名が消えている。
   //     iframe にも生える（掃除はフレーム単位）ので、この処理は最上位フレームの早期 return より
   //     前で全フレーム分行う。token 無し（スモーク）ビルドはバインディングを公開せず後から
   //     window へ差し込むため、掃除せず callBinding の実行時フォールバックに任せる。
-  const BINDING_NAMES = [
-    '__eac_toggle', '__eac_shot', '__eac_open_folder', '__eac_spa_toggle',
-    '__eac_set_selector', '__eac_commit_selector',
-    '__eac_spa_changed', '__eac_getstate',
-  ];
+  //
+  //     名前そのものは Python から配られる（C.bind。出所は badge.py の BIND_* 1 箇所）。
+  //     以前はこの JS 側にも同じ名前のリテラルが並んでいて、片方だけ変えると無言失敗した
+  //     （#100・CONTRIBUTING §1-5）。**ここに名前を書き戻さないこと。**
+  const BINDING_NAMES = Object.values(C.bind);
   const BOUND = {};
   BINDING_NAMES.forEach((n) => {
     BOUND[n] = window[n];
@@ -138,7 +141,7 @@
 
   // --- SPA検知（中身変化のイベント駆動監視） ---
   // 変化は MutationObserver で捉え、SPA_SETTLE_MS のデバウンスで「落ち着いてから」署名を
-  // 確定し、前回と違えば Python へ通知する（__eac_spa_changed）。従来の「Python が毎tick
+  // 確定し、前回と違えば Python へ通知する（C.bind.spaChanged）。従来の「Python が毎tick
   // 署名を評価するポーリング」を廃し、変化があったときだけ計算するので負荷が下がる。
   const SPA_SETTLE_MS = (C.settleMs > 0) ? C.settleMs : 300;   // 変化が止まってから確定するまで
   const SPA_MAX_WAIT_MS = Math.max(SPA_SETTLE_MS * 5, 3000);   // 変化が続く場合でも確定する上限
@@ -260,6 +263,9 @@
   // バーの構造。要素間の空白（改行/インデント）は flex/inline-flex コンテナ内では
   // 空白のみのテキストノードとして無視されるため、表示には影響しない。文言は
   // 後から textContent/属性で入れる（HTML への直接埋め込みを避ける）。
+  // セレクタ候補の datalist の id はシャドウ内で閉じているのでページ側とは衝突しない
+  // （かつて __eac_ 接頭辞を付けていたが、バインディング名の一元化・#100 に合わせて
+  //  この JS から __eac_ で始まる文字列リテラルを無くした。id 自体はどう名付けても等価）。
   const MARKUP = `
     <div class="wrap"><div class="bar idle" data-eac="bar">
       <span class="status"><span class="dot idle" data-eac="dot"></span><span class="label" data-eac="label"></span></span>
@@ -267,7 +273,7 @@
       <button class="btn" data-eac="shot"></button>
       <button class="btn" data-eac="open"></button>
       <span class="shots" data-eac="shots"></span>
-      <span class="sel-wrap"><input class="sel" type="text" data-eac="selector" list="__eac_sel_history"><datalist id="__eac_sel_history" data-eac="history"></datalist><span class="sel-count" data-eac="sel-count"></span></span>
+      <span class="sel-wrap"><input class="sel" type="text" data-eac="selector" list="sel-history"><datalist id="sel-history" data-eac="history"></datalist><span class="sel-count" data-eac="sel-count"></span></span>
       <span class="spa-wrap" data-eac="spa-wrap"><span class="spa-label" data-eac="spa-label"></span>
         <button class="spa off" role="switch" data-eac="spa"><span class="spa-text" data-eac="spa-text"></span>
         <span class="spa-knob"></span></button></span>
@@ -523,21 +529,22 @@
 
       // 操作はすべて expose_binding 経由で Python へ通知する。第1引数に合言葉 TOK を付ける。
       // 呼び出しは callBinding に通す（退避済みの本物を使い、TOK をサイト側へ渡さない）。
-      els.toggle.addEventListener('click', () => callBinding('__eac_toggle', TOK));
-      els.shot.addEventListener('click', () => callBinding('__eac_shot', TOK));
+      // 名前は Python から配られた C.bind を使う（この JS に名前のリテラルは置かない・#100）。
+      els.toggle.addEventListener('click', () => callBinding(C.bind.toggle, TOK));
+      els.shot.addEventListener('click', () => callBinding(C.bind.shot, TOK));
       // 保存先フォルダを開く。Python 側が OS のファイルマネージャで開く（ローカル操作）。
-      els.open.addEventListener('click', () => callBinding('__eac_open_folder', TOK));
+      els.open.addEventListener('click', () => callBinding(C.bind.openFolder, TOK));
       // 透過トグルは見た目だけのローカル状態（Python への通知は不要）。押すたびに反転して再描画する。
       els.peek.addEventListener('click', () => { peekOn = !peekOn; apply(recording, spaOn); });
-      els.spa.addEventListener('click', () => callBinding('__eac_spa_toggle', TOK));
+      els.spa.addEventListener('click', () => callBinding(C.bind.spaToggle, TOK));
       // 入力のたびにローカルで即座に見た目（SPAボタンの有効/無効・一致件数）を反映しつつ、
       // Python 側へも値を通知する（入力欄はフォーカス中なので apply が上書きしない）。
       els.sel.addEventListener('input', () => {
         apply(recording, spaOn, els.sel.value);
-        callBinding('__eac_set_selector', TOK, els.sel.value);
+        callBinding(C.bind.setSelector, TOK, els.sel.value);
       });
       // 確定時（blur / Enter）に最終値をログへ（入力毎の氾濫を避ける）。
-      els.sel.addEventListener('change', () => callBinding('__eac_commit_selector', TOK, els.sel.value));
+      els.sel.addEventListener('change', () => callBinding(C.bind.commitSelector, TOK, els.sel.value));
 
       document.body.appendChild(host);
       // バーが site の再描画で消えたら付け直すための監視を張る（body 確定後の今だけ）。
@@ -553,7 +560,7 @@
     };
     const fallback = { recording: recording, spa: spaOn, selector: selector };
     // 未注入・呼び出し不能なら callBinding が undefined を返すので、直前の状態で描画する。
-    const pending = callBinding('__eac_getstate', TOK);
+    const pending = callBinding(C.bind.getState, TOK);
     if (pending && typeof pending.then === 'function') {
       pending.then(finish).catch(() => finish(fallback));
     } else {
@@ -680,7 +687,7 @@
     if (spaNavPending) { spaNavPending = false; spaLastSig = sig; return; }
     if (sig !== spaLastSig) {
       spaLastSig = sig;
-      callBinding('__eac_spa_changed', TOK, sig);
+      callBinding(C.bind.spaChanged, TOK, sig);
     }
   }
 
