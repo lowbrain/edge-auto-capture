@@ -6,13 +6,15 @@ CONTRIBUTING §1-5 が「バインディング名は 2 箇所に存在し、片�
 
 - badge.py の BIND_* 定数群（Python → expose_binding で公開する名前）
 - badge.js の BINDING_NAMES 配列（ページ側で BOUND へ退避し、存在検知の防止のため window から消す名前）
+- app.py の CaptureSession.setup() が実際に expose_binding する名前
 
-この 2 つは 1:1 で一致していなければならない。ずれても例外もログも出ず、
+この 3 つは 1:1 で一致していなければならない。ずれても例外もログも出ず、
 操作バーのボタンが黙って効かなくなるだけなので、ここで縛る。
 あわせて §1-6 の「callBinding 経由で呼ぶ」も、呼び出し名が BINDING_NAMES に
 含まれることとして固定する（直接呼び出しを新たに書かせないための担保）。
 
-実 Edge 不要（badge.py は Playwright を import しない）。
+実 Edge 不要。setup() を通す最後の 1 本だけは app.py（Playwright 依存）を
+import するので、他の 3 本を巻き込まないよう関数内 import にしてある。
 
 実行:
     pip install -e ".[dev]"
@@ -81,3 +83,59 @@ def test_call_binding_targets_are_all_declared():
     called = set(re.findall(r"callBinding\('([^']+)'", _badge_js_source()))
     assert called, "badge.js に callBinding の呼び出しが見つからない"
     assert called <= _js_binding_names()
+
+
+# --------------------------------------------------------------------------- #
+# BIND_* と setup() が実際に公開する名前の一致（CONTRIBUTING §1-5）
+# --------------------------------------------------------------------------- #
+
+
+class _BindingContext:
+    """setup() が呼ぶ context 側 API の最小代役。公開されたバインディング名だけを記録する。
+
+    tests/test_session.py の _SetupContext が同じ役を厚く演じている（種入れ・監視配線まで
+    検証する）が、ここで見たいのは「どの名前が expose_binding されたか」の 1 点だけなので、
+    それに要る最小限にとどめる。ページは 0 枚（種入れを走らせない）で足りる。
+    """
+
+    def __init__(self) -> None:
+        self.pages: list = []
+        self.bindings: list = []
+
+    async def expose_binding(self, name, callback) -> None:
+        self.bindings.append(name)
+
+    async def add_init_script(self, script) -> None:
+        pass
+
+    def on(self, event, handler) -> None:
+        pass
+
+
+def test_setup_exposes_exactly_the_declared_bindings():
+    """setup() を実際に通し、公開された名前が BIND_* と過不足なく一致することを見る。
+
+    上の 2 本は badge.py ↔ badge.js の言語境界を縛るが、**そこを通っても
+    app.py 側で expose_binding し忘れれば同じように無言失敗する**。ページ側は
+    callBinding が BOUND[name] を引けず typeof チェックで undefined を返して終わりなので、
+    例外もログも出ずボタンだけが効かなくなる（§1-5 が名指しする失敗の仕方）。
+
+    公開の一覧を宣言（定数・対応表など）から読み取るのではなく setup() を実際に通すのは、
+    宣言を用意してもそれを使わない実装に変われば同じ穴が空くため。公開の書き方が
+    どう変わっても効くように、外から見える結果（何が公開されたか）だけを見る。
+    """
+    import asyncio
+
+    from edge_auto_capture.app import CaptureSession
+    from edge_auto_capture.config import Config
+
+    async def scenario() -> list:
+        ctx = _BindingContext()
+        await CaptureSession(ctx, Config()).setup()
+        return ctx.bindings
+
+    exposed = asyncio.run(scenario())
+    # 同じ名前を 2 度公開していない（Playwright は 2 度目で例外を投げる＝起動できない）。
+    assert len(exposed) == len(set(exposed)), f"バインディングの二重公開: {exposed}"
+    # 落ちも余りも無い。差分はそのまま「直すべき側」の一覧になる。
+    assert set(exposed) == _py_binding_names()
