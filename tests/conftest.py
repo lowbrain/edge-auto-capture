@@ -23,7 +23,7 @@ def _no_dialog_no_repo_writes(monkeypatch, tmp_path):
     - notify_fatal 経由の _message_box はダイアログを出しテストを止めるので no-op に。
     - log() の書き込み先（LOG_PATH）を一時フォルダへ逃がす。
     どちらも基盤ユーティリティ（infra）にあるので infra を差し替える。
-    - session_stamp（F-C3 の起動時刻サブフォルダ名）を "" に固定する。実時刻由来だと
+    - session_stamp（起動時刻のセッションサブフォルダ名）を "" に固定する。実時刻由来だと
       load_config が返す output_dir が起動秒ごとに変わり、設定パース系テストの
       output_dir 比較が不安定になるため、既定では無効化して基準フォルダのままにする。
       セッションフォルダ挿入そのものは test_load_config_inserts_session_folder 系で検証する。
