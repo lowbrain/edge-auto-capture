@@ -5,10 +5,12 @@
 気づくのが配布 exe を作った後（しかも --noconsole なら無言死）になる。
 
 - badge.js が package-data として宣言され、実在すること（#68・#81）
+- default_config.ini が package-data として宣言され、実在すること（#101）
+- 同梱データのパス解決（infra.package_data_path）が frozen/非 frozen で正しいこと（#101）
 - USAGE.txt が Shift-JIS として健全であること（#69）
 
-どちらも標準ライブラリだけで完結させる。CI は 3.9 と 3.12 の両方で pytest を回すので、
-tomllib（3.11+）は使えない（pyproject は正規表現で読む）。
+依存は標準ライブラリと本体パッケージだけで完結させる。CI は 3.9 と 3.12 の両方で
+pytest を回すので、tomllib（3.11+）は使えない（pyproject は正規表現で読む）。
 
 実行:
     pip install -e ".[dev]"
@@ -17,6 +19,8 @@ tomllib（3.11+）は使えない（pyproject は正規表現で読む）。
 
 import re
 from pathlib import Path
+
+from edge_auto_capture import infra
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,6 +46,70 @@ def test_badge_js_exists_next_to_badge_py():
     package_dir = ROOT / "src" / "edge_auto_capture"
     assert (package_dir / "badge.py").is_file()
     assert (package_dir / "badge.js").is_file()
+
+
+# --------------------------------------------------------------------------- #
+# default_config.ini の同梱（#101）
+# --------------------------------------------------------------------------- #
+# 既定 config.ini の中身はかつて config.py の DEFAULT_CONFIG_TEXT（約 60 行の文字列
+# リテラル）とルートの config.ini に二重で置かれ、バイト一致テストで drift を
+# 押さえ込んでいた。出所を .ini 1 つにして package-data で配る形に寄せたぶん、
+# 「wheel に入らない」という badge.js と同じ壊れ方を新たに引き受けている（自己修復で
+# 書き出す既定ファイルが空になり、利用者は設定の雛形を失う）。badge.js と同じ型の
+# 不変条件でここを縛る。
+
+
+def test_default_config_ini_is_declared_as_package_data():
+    src = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    m = re.search(r"^\[tool\.setuptools\.package-data\]\s*$(.*?)^\[", src, re.MULTILINE | re.DOTALL)
+    assert m, "pyproject.toml に [tool.setuptools.package-data] セクションが見つからない"
+    assert re.search(r'edge_auto_capture\s*=\s*\[[^\]]*"default_config\.ini"', m.group(1))
+
+
+def test_default_config_ini_exists_in_package():
+    # config.py の _default_config_text() は package_data_path("default_config.ini") を読む前提。
+    package_dir = ROOT / "src" / "edge_auto_capture"
+    assert (package_dir / "default_config.ini").is_file()
+    # ルートには置かない（二重管理へ戻さない）。
+    assert not (ROOT / "config.ini").is_file()
+
+
+def test_build_ps1_bundles_both_package_data_files():
+    # 凍結（PyInstaller）経路は自動テストで実行検証できないので、せめて
+    # --add-data の指定が両方残っていることを固定する。落とすと exe だけが
+    # 起動時に壊れ、--noconsole ゆえ無言で気づけない。
+    ps1 = (ROOT / "build.ps1").read_text(encoding="utf-8")
+    assert '--add-data "src\\edge_auto_capture\\badge.js;."' in ps1
+    assert '--add-data "src\\edge_auto_capture\\default_config.ini;."' in ps1
+
+
+# --------------------------------------------------------------------------- #
+# 同梱データのパス解決（infra.package_data_path・#101）
+# --------------------------------------------------------------------------- #
+# badge.js と default_config.ini は同じ解決規則（frozen なら sys._MEIPASS、通常実行なら
+# パッケージフォルダ）で読む。BASE_DIR（非 frozen では cwd・CONTRIBUTING §1-11）とは
+# 別物で、取り違えると「開発中は動くが exe だけ壊れる」形になる。
+
+
+def test_package_data_path_non_frozen_uses_package_dir():
+    # 通常の Python 実行では、infra.py と同じフォルダ（＝パッケージフォルダ）。
+    expected = Path(infra.__file__).resolve().parent / "badge.js"
+    assert infra.package_data_path("badge.js").resolve() == expected
+
+
+def test_package_data_path_frozen_uses_meipass(monkeypatch, tmp_path):
+    # PyInstaller で凍結した場合は同梱データの展開先（sys._MEIPASS）直下。
+    monkeypatch.setattr(infra.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(infra.sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert infra.package_data_path("default_config.ini") == tmp_path / "default_config.ini"
+
+
+def test_package_data_path_frozen_without_meipass_falls_back_to_exe_dir(monkeypatch, tmp_path):
+    # _MEIPASS が無い凍結形態（onefile 以外）でも exe の隣を見て動き続ける。
+    monkeypatch.setattr(infra.sys, "frozen", True, raising=False)
+    monkeypatch.delattr(infra.sys, "_MEIPASS", raising=False)
+    monkeypatch.setattr(infra.sys, "executable", str(tmp_path / "edge-auto-capture.exe"), raising=False)
+    assert infra.package_data_path("badge.js") == tmp_path / "badge.js"
 
 
 # --------------------------------------------------------------------------- #

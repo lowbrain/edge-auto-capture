@@ -1,6 +1,7 @@
 """基盤ユーティリティ（アプリの土台。Playwright 非依存）。
 
 - 基準フォルダ（BASE_DIR / _base_dir）
+- 同梱データの場所（package_data_path）
 - ログと時刻の整形（LOG_PATH / set_log_dir / log / iso_timestamp / ms3）
 - 致命的エラー通知（notify_fatal / _message_box）
 - 一時プロファイルの後始末（cleanup_old_profiles）
@@ -46,6 +47,30 @@ def _base_dir() -> Path:
 
 # 設定・出力の基準フォルダ（通常実行なら本ファイル、exe 実行なら exe と同じ場所）。
 BASE_DIR = _base_dir()
+
+
+def package_data_path(name: str) -> Path:
+    """パッケージへ同梱したデータファイル（badge.js / default_config.ini）の場所を返す。
+
+    PyInstaller で凍結（frozen）した場合は同梱データの展開先（sys._MEIPASS）、
+    通常実行時はこのパッケージのフォルダを見る。build.ps1 が
+    --add-data で各ファイルを _MEIPASS 直下へ同梱する前提。
+
+    **BASE_DIR（_base_dir）とは別物**なので取り違えないこと。BASE_DIR は「利用者が
+    編集する config.ini や output\\ の置き場所」で、非 frozen ではカレントディレクトリ
+    （#81・CONTRIBUTING §1-11）。こちらは「コードと一緒に配られる読み取り専用データ」の
+    場所で、非 frozen ではパッケージフォルダ（`Path(__file__).parent`）。同じ frozen 判定を
+    2 つの意味で使うため、片方の理屈でもう片方を「直す」と静かに壊れる。
+
+    呼び出し側は**読むたびに呼ぶ**こと（import 時に読み込んで定数化しない）。import
+    しただけで I/O が走ると、凍結環境などで失敗経路を 1 つ増やす（badge.py が
+    BADGE_SCRIPT のモジュール読み込み時生成をやめたのと同じ理由）。
+    """
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    else:
+        base = Path(__file__).parent
+    return base / name
 
 # 実行ログの出力先。コンソール無し（windowed exe）で実行しても後から動作を追える
 # ようにする。既定は基準フォルダだが、設定読み込み後に PNG などと同じ保存先
