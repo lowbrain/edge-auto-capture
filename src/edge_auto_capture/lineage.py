@@ -4,16 +4,10 @@
 - 系譜 1 つぶんの実行時状態（GroupState）と、その生成（make_group）
 - ページ → 所属グループの解決・メモ化と、ページ消滅時の後始末を担うレジストリ（LineageRegistry）
 
-以前は capture.py のモジュール関数（group_stamp / group_folder_name / group_subdir）と、
-当時の edge_auto_capture.py（現 app.py）の CaptureSession が持つ groups / page_root および
-_resolve_group / _make_group / _find_root に分かれていた。系譜まわりの規約と解決ロジックを
-1 か所へ寄せ、状態の所在を明確にし単体テストしやすくするために新設した（#36）。
-「既存クラスの移動」ではなく「新設して寄せた」もの。
-
 capture.py は保存先の組み立てとログ表記に group_folder_name / group_subdir を、
 app.py は注釈と保存先の解決に GroupState / group_subdir 等を、それぞれここから
 import して使う。結果として capture.group_subdir のような経路でも辿れてしまうが、それに依存する
-コードは無い（テストも lineage から直接 import する。#53）。系譜の規約を参照する側は
+コードは無い（テストも lineage から直接 import する）。系譜の規約を参照する側は
 このモジュールから import すること。
 """
 
@@ -31,7 +25,7 @@ def group_stamp() -> str:
 
     系譜を新たに作った時刻をそのまま id にする。区切り記号を入れないので `lineage-<id>` の
     <id> 部分は連続した数字になる（例: 20260814102028731）。
-    ミリ秒 3 桁の切り出しは infra.ms3 が持つ（capture.now_stamp と共通の 1 点。#56）。
+    ミリ秒 3 桁の切り出しは infra.ms3 が持つ（capture.now_stamp と共通の 1 点）。
     書式そのものは共通化しない（あちらは人が時系列で読む区切り付きのファイル名接頭辞）。
     """
     now = datetime.now()
@@ -83,11 +77,9 @@ class LineageRegistry:
     opener 連鎖から root を決めてメモ化し、まだグループの無い root（＝手動で開かれた新規タブ）は
     初期OFF（無関係タブを勝手に撮らない）の独立グループとして採番する。
 
-    以前は CaptureSession が groups / page_root と _resolve_group / _find_root を直接持っていた。
-    系譜の解決を CaptureSession から切り離してここへ寄せ、ブラウザ無しで単体テストできるようにする。
     起動時の最初のグループは呼び出し側（setup() が start_recording に従って）作り、seed_root で預ける。
 
-    系譜の「生存管理」もここで完結させる（#48）。採番（resolve）だけをここに置いて掃除を
+    系譜の「生存管理」もここで完結させる。採番（resolve）だけをここに置いて掃除を
     CaptureSession 側に残すと、状態を足したときに 2 モジュールを直さないと整合しなくなるため、
     種入れ（seed_root）とページ消滅時の後始末（release）も API として持つ。外から groups /
     page_root を直接書き換えないこと（CaptureSession 側は読み取り専用ビューだけを公開する）。
@@ -115,8 +107,7 @@ class LineageRegistry:
 
         ページ→root のメモを消し、どの生存ページからも参照されなくなった root のグループ状態も
         捨てる（root ページ自身が閉じても、ポップアップが残る間はグループを保持する）。
-        以前は CaptureSession._on_page_closed がレジストリの辞書を直接書き換えていたため、
-        系譜の生存管理だけが 2 モジュールに分かれていた（#48）。
+        レジストリの辞書は外から直接書き換えず、必ずこの API を通すこと。
         """
         self.page_root.pop(page, None)
         alive_roots = set(self.page_root.values())

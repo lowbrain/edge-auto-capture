@@ -4,9 +4,9 @@
 - ファイル名スラッグの生成（safe_name / page_label）
 - 1 ページ分の保存（png / txt / _part.txt）を担う撮影実行器（CaptureRunner）
 
-撮影の実行時状態（実行中タスク・ページ単位ワーカー・保留要求）は、以前モジュール
-グローバルだったが、CaptureRunner のインスタンスが own する（1 監視セッションに 1 個。
-状態の所在を明確にする）。同一ページの撮影はワーカーで直列化し、進行中に来た要求は
+撮影の実行時状態（実行中タスク・ページ単位ワーカー・保留要求）は CaptureRunner の
+インスタンスが own する（1 監視セッションに 1 個。状態の所在をセッションに閉じる）。
+同一ページの撮影はワーカーで直列化し、進行中に来た要求は
 「保留1件・最新で置き換え」に合流させる（キュー無制限の防止）。
 ページ側 JS の呼び出し式・文言は badge モジュールに集約してあり、ここから参照する。
 """
@@ -50,7 +50,7 @@ def now_stamp() -> str:
     """現在時刻を「YYYY-MM-DD_HH-MM-SS-mmm」（ミリ秒まで）で返す。
 
     保存ファイル名の接頭辞に使う（人が時系列で見分けやすいよう区切り付き）。
-    ミリ秒 3 桁の切り出しは infra.ms3 が持つ（lineage.group_stamp と共通の 1 点。#56）。
+    ミリ秒 3 桁の切り出しは infra.ms3 が持つ（lineage.group_stamp と共通の 1 点）。
     書式そのものは共通化しない（あちらは `lineage-<id>` のトークンで区切り無し）。
     """
     now = datetime.now()
@@ -119,10 +119,8 @@ def _step(tag: str, url: str, done: Optional[list[str]] = None) -> Iterator[None
 class CaptureRequest:
     """撮影 1 回分の要求。spawn→_pending→_worker→_capture を貫通する 1 オブジェクト。
 
-    以前は `(url, config, selector, group_id)` の位置引数タプルが 4 経路を貫通していた
-    （順序に依存し、要素を 1 個足すたびに 4 箇所の分解を直す必要があった）。1 オブジェクトへ
-    集約したことで、以後の機能（索引 CSV の「撮影契機」など）は「フィールドを 1 個
-    足す」だけで全経路へ伝わる。trigger はその最初の実例（フェーズ 2）。
+    経路ごとに位置引数を並べ直さず、この 1 オブジェクトで貫通させる（撮影に関わる値を
+    増やすときは、ここへフィールドを 1 個足せば全経路へ伝わる）。
 
     page は撮影対象ページ。_pending / _workers のキーでもあるが、要求そのものにも保持して
     「1 要求＝1 オブジェクト」で完結させる。selector は _part.txt 抜き出しの対象（実行時の
@@ -142,9 +140,8 @@ class CaptureRequest:
 class CaptureRunner:
     """1 監視セッション分の撮影実行器。
 
-    撮影のバックグラウンドタスクを own する。以前はモジュールグローバル（_tasks 等）
-    だったものをここへ集約し、状態がセッションに閉じる（テスト時の持ち越しや、
-    複数セッション時の共有事故を避ける）。
+    撮影のバックグラウンドタスクを own する。状態はモジュールグローバルへ出さず
+    インスタンスに閉じる（テスト時の持ち越しや、複数セッション時の共有事故を避ける）。
 
     撮影は **ページごとに1つのワーカー**で直列化し、進行中に来た新しい要求は
     「保留1件・最新で置き換え」に合流させる（キュー無制限の防止）。
@@ -178,7 +175,7 @@ class CaptureRunner:
 
         # ページごとに走っている worker タスク。存在すれば新規起動せず、既存 worker が
         # 現在の撮影を終えたあと _pending を拾う。1 ページ＝1 worker なので同ページの
-        # 撮影は完全に直列化される（＝以前の page 単位ロックは不要になった）。
+        # 撮影は完全に直列化される（page 単位のロックは要らない）。
         self._workers: weakref.WeakKeyDictionary[Page, asyncio.Task] = (
             weakref.WeakKeyDictionary()
         )
@@ -228,12 +225,11 @@ class CaptureRunner:
 
         個々の保存（png / txt / part）は _save_screenshot / _save_text / _save_part に
         委ねる。「保存物 1 種＝メソッド 1 本」の粒度に分けてあるのは、ここへ保存物を
-        足すため。索引 CSV は実際にこの粒度で足した（#13。同じクラスの
-        _append_index）。保存順・ファイル名・ログ文言は不変。
+        足すため（索引 CSV の _append_index も同じ粒度）。
 
         各 _save_* へは req をそのまま渡し、page / url / config / selector はあちら側が
-        req から取る（#55 と同じ理由。引数へ並べると隣接する同型（str）の stem と url を
-        取り違えても型検査で止まらず、保存物を 1 種足すたびに同じ行列がもう 1 本増える）。
+        req から取る（引数へ並べると隣接する同型（str）の stem と url を取り違えても
+        型検査で止まらず、保存物を 1 種足すたびに同じ行列がもう 1 本増える）。
         追加で渡すのは、この撮影中に確定して req には載らない save_dir / stem / done だけ。
         """
         # req.selector は「一部抜き出し(_part.txt)」の対象 CSS セレクタ。操作バーの入力欄で
@@ -243,7 +239,7 @@ class CaptureRunner:
         # 時系列順を保証し、末尾のタイトルは人がページを見分けるための情報。
         # ts は await より前に確定させる。タイトルはページ読み込み後に確定させる。
         # ローカルへ展開するのは多用する page / url だけに留め、他は req.* のまま参照する
-        # （CaptureRequest にフィールドを足したときに触る行を増やさないため。#55）。
+        # （CaptureRequest にフィールドを足したときに触る行を増やさないため）。
         page = req.page
         url = req.url
         ts = now_stamp()                                     # 例: 2026-08-11_14-30-25-123
@@ -256,8 +252,8 @@ class CaptureRunner:
             await page.wait_for_load_state("load", timeout=req.config.load_timeout)
         # 描画が落ち着くまで待つ（settle_delay）。ただし SPA 経由は、ページ側 badge.js が
         # SPA_SETTLE_MS のデバウンスで既に「変化が止まってから」通知している。ここで再び
-        # settle_delay を待つと二重待ちになり体感が遅れるだけなので省く（#18）。
-        # URL遷移/手動は load 直後にまだ描画が動きうるので従来どおり待つ。
+        # settle_delay を待つと二重待ちになり体感が遅れるだけなので省く。
+        # URL遷移/手動は load 直後にまだ描画が動きうるので待つ。
         if req.trigger != "spa":
             await asyncio.sleep(req.config.settle_delay)
 
@@ -327,10 +323,10 @@ class CaptureRunner:
         系譜ごとのサブフォルダではなく output_dir 直下に置き、全系譜の撮影を 1 本の索引にまとめる
         （log.txt と同じ粒度）。列は時刻/URL/タイトル/ファイル名接頭辞/撮影契機/セレクタ/成否。
 
-        撮影要求そのもの（req）を受け取り、config / url / trigger / selector はそこから取る（#55）。
-        以前は 8 個の位置引数で、隣接する同型（str）の trigger と selector を取り違えても型検査で
-        止まらなかった。列を足すたびに並びを直す作業も CaptureRequest へフィールドを足すだけで済む。
-        引数に残る captured_at / title / stem は撮影中に確定する値で、req には載らない。
+        撮影要求そのもの（req）を受け取り、config / url / trigger / selector はそこから取る
+        （列を足すときは CaptureRequest へフィールドを足すだけで済み、隣接する同型（str）の
+        trigger と selector を引数で取り違える余地も無い）。引数に残る captured_at / title /
+        stem は撮影中に確定する値で、req には載らない。
 
         文字化け対策（地雷）: Excel で開く前提なので BOM 付き（utf-8-sig）で書く。ただし追記のたびに
         utf-8-sig で開くと毎回 BOM を書き足して行頭へ紛れ込むため、BOM は新規作成時の 1 度だけにし、
