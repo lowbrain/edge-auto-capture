@@ -99,7 +99,7 @@ class LineageRegistry:
         self.groups: dict[Page, GroupState] = {}   # root ページ -> そのグループの状態
         self.page_root: dict[Page, Page] = {}      # 各ページ -> 所属グループの root（メモ化）
 
-    def seed_root(self, page, group: GroupState) -> None:
+    def seed_root(self, page: Page, group: GroupState) -> None:
         """page を「自分自身が root」のグループとして登録する（起動時ページの種入れ）。
 
         起動時点で開いているページ（通常は1枚）は opener を持たないので、resolve に任せると
@@ -110,7 +110,7 @@ class LineageRegistry:
         self.page_root[page] = page
         self.groups[page] = group
 
-    def release(self, page) -> None:
+    def release(self, page: Page) -> None:
         """閉じられたページを系譜の管理から外し、参照の無くなったグループを捨てる。
 
         ページ→root のメモを消し、どの生存ページからも参照されなくなった root のグループ状態も
@@ -124,7 +124,7 @@ class LineageRegistry:
             if root not in alive_roots:
                 del self.groups[root]
 
-    async def find_root(self, page) -> Page:
+    async def find_root(self, page: Page) -> Page:
         """page の所属グループの root ページを opener 連鎖から求める。
 
         既知の root（page_root に載っているページ）に達したらそれを、opener が None に達したら
@@ -144,7 +144,7 @@ class LineageRegistry:
                 return p
             p = parent
 
-    async def resolve(self, page) -> GroupState:
+    async def resolve(self, page: Page) -> GroupState:
         """page が属するグループの状態を返す（無ければ新規グループを OFF で作る）。
 
         opener を辿って root を決めてメモ化する。root のグループがまだ無い＝手動で開かれた

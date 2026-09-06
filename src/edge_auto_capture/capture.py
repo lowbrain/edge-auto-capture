@@ -15,7 +15,7 @@ import asyncio
 import csv
 import re
 import weakref
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -97,7 +97,7 @@ def page_label(title: str, url: str) -> str:
 
 
 @contextmanager
-def _step(tag: str, url: str, done=None):
+def _step(tag: str, url: str, done: Optional[list[str]] = None) -> Iterator[None]:
     """保存処理 1 ステップ分の共通ラッパ。
 
     例外が出ても [skip <tag>] を表示して握り、他ステップの続行を妨げない。

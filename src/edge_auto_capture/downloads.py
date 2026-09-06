@@ -9,6 +9,8 @@ CaptureSession.on_download は系譜解決だけ行い、本体の保存は save
 
 from pathlib import Path
 
+from playwright.async_api import Download
+
 from .config import Config
 from .infra import log
 from .lineage import group_folder_name, group_subdir
@@ -41,7 +43,7 @@ def _unique_path(directory: Path, name: str) -> Path:
         n += 1
 
 
-async def save(download, config: Config, group_id: str = "") -> None:
+async def save(download: Download, config: Config, group_id: str = "") -> None:
     """利用者がブラウザで落としたファイルを保存先へ退避する。
 
     Playwright は既定でダウンロードをコンテキスト終了時に削除する。
