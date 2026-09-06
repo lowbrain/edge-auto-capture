@@ -43,9 +43,13 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# ページ側 JS 本体（badge.py が実行時に読む実ファイル）。py-modules 時代は
+# 実行時に読む実ファイル。py-modules 時代は package-data が使えず、
 # pip install（非 editable）で wheel に入らず起動不能になっていた（#81）。
-edge_auto_capture = ["badge.js"]
+#   badge.js           : ページ側 JS 本体（badge.py が実行時に読む）
+#   default_config.ini : 既定 config.ini のテンプレート（config.py が自己修復で書き出す）。
+#                        以前は config.py の DEFAULT_CONFIG_TEXT とルートの config.ini が
+#                        同内容で並んでいた二重管理を、.ini 側 1 つへ寄せた（#101）
+edge_auto_capture = ["badge.js", "default_config.ini"]
 
 [tool.setuptools.dynamic]
 # バージョンは infra.__version__ を出所にする（project.dynamic と対）。

@@ -107,10 +107,10 @@ edge-auto-capture/
 │     ├─ browser.py       Edge/Chrome の起動候補と起動オプションの組み立て
 │     ├─ badge.py         操作バーのページ側JS組み立て（表示文言→$CONFIG／バインディング名）
 │     ├─ badge.js         操作バーのページ側JS本体（実ファイル・package-data）
+│     ├─ default_config.ini  既定の設定テンプレート（実ファイル・package-data）
 │     └─ downloads.py     ダウンロードの保存先解決とファイル退避
 ├─ tests/                 テストと conftest.py（構成は下の「テスト」節）
 ├─ .github/workflows/ci.yml  CI（ruff+mypy / pytest / smoke --strict）
-├─ config.ini             既定の設定ファイル
 ├─ pyproject.toml         依存とパッケージ設定
 ├─ README.md              このファイル（開発者向け）
 ├─ CONTRIBUTING.md        触る人向けの落とし穴・作業環境・検証手順
@@ -119,9 +119,15 @@ edge-auto-capture/
 └─ build.ps1              配布用 exe のビルド（PyInstaller）
 ```
 
-`config.ini` / `USAGE.txt` / `build.ps1` は配布素材・スクリプトなのでルート据え置き
+`USAGE.txt` / `build.ps1` は配布素材・スクリプトなのでルート据え置き
 （`src/` へは入れない）。生成物（`build/` `dist/` `output/` `__pycache__/` `*.spec`・
-`src/edge_auto_capture.egg-info/`）は Git 管理外。
+`src/edge_auto_capture.egg-info/`・実行時に生成される `config.ini`）は Git 管理外。
+
+既定の設定テンプレートは `src/edge_auto_capture/default_config.ini` に 1 つだけ置き、
+`badge.js` と同じ package-data として配る。`config.py` が自己修復（`config.ini` の欠落・
+破損時）に書き出す原本もこれで、`build.ps1` が配布フォルダへ置く `config.ini` もこれの写し。
+以前は同じ内容が `config.py` の文字列リテラルとルートの `config.ini` に二重にあり、
+バイト一致テストで drift を押さえ込んでいた（#101 で解消）。
 
 ## 開発時の実行
 
@@ -134,6 +140,8 @@ python -m edge_auto_capture
 `pip install -e .` 済みなら `edge-auto-capture` コマンドでも同じものが起動する。
 
 挙動は実行時のカレントディレクトリの `config.ini` で設定する（下表）。
+**この `config.ini` はリポジトリに無く、初回起動時にカレントディレクトリへ自動生成される**
+（同梱テンプレート `src/edge_auto_capture/default_config.ini` の写し。`.gitignore` 済み）。
 実際の操作方法は `USAGE.txt` を参照。停止は Ctrl+C かブラウザのウィンドウを閉じる。
 
 ### 設定（config.ini）
@@ -209,10 +217,12 @@ Python 未導入の Windows PC でも動く、単一 EXE（フォルダ形式）
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-PyInstaller が `dist\edge-auto-capture\` を生成し、`config.ini` / `USAGE.txt` /
+PyInstaller が `dist\edge-auto-capture\` を生成し、`config.ini`（同梱テンプレート
+`src/edge_auto_capture/default_config.ini` の写し）/ `USAGE.txt` /
 依存ライセンス表記（`THIRD-PARTY-NOTICES.txt`）/ `LICENSE`（あれば）を exe の隣へ同梱する。
-ページ側 JS の `badge.js` は `--add-data` で `_internal\` に同梱され、
-実行時は `sys._MEIPASS` から読み込まれる（`badge.py` `capture.py` は import から自動で辿られる）。
+ページ側 JS の `badge.js` と既定設定の `default_config.ini` は `--add-data` で `_internal\` に
+同梱され、実行時は `sys._MEIPASS` から読み込まれる（解決は `infra.package_data_path` の
+1 か所。`badge.py` `capture.py` は import から自動で辿られる）。
 最後に配布用の `dist\edge-auto-capture.zip` と、その `*.zip.sha256`（完全性確認用）を作る。
 
 #### コードサイニング署名（任意）
@@ -244,7 +254,7 @@ edge-auto-capture\
 ├─ USAGE.txt                  利用者向けの使い方
 ├─ THIRD-PARTY-NOTICES.txt    同梱依存（Playwright 等）のライセンス表記
 ├─ LICENSE.txt                本体のライセンス（LICENSE がある場合）
-├─ _internal\                 ランタイム + playwright ドライバ + badge.js（必須・触らない）
+├─ _internal\                 ランタイム + playwright ドライバ + badge.js + default_config.ini（必須・触らない）
 └─ output\                    実行後に生成される保存先
 ```
 

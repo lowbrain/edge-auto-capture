@@ -69,18 +69,25 @@ Write-Host "  バージョン $ver を埋め込みます: $verFile" -ForegroundC
 Write-Host "[3/6] PyInstaller でビルドします ..."
 # --collect-all playwright                     : Playwright の node ドライバを同梱（凍結時に必須）
 # --noconsole                                  : 黒いコンソール窓を出さない（動作ログは log.txt に出力）
-# --add-data "src\edge_auto_capture\badge.js;." : 操作バーのページ側 JS を _MEIPASS 直下へ同梱
-#                                                 （badge.py の _badge_js_path が sys._MEIPASS から読む）
-# --version-file                               : exe プロパティへ版を埋め込む（上で生成した version_info.txt）
+# --add-data "src\edge_auto_capture\badge.js;."           : 操作バーのページ側 JS を _MEIPASS 直下へ同梱
+#                                                            （badge.py の _badge_js_path が sys._MEIPASS から読む）
+# --add-data "src\edge_auto_capture\default_config.ini;." : 既定 config.ini のテンプレートを _MEIPASS 直下へ同梱
+#                                                            （config.py の _default_config_text が自己修復で読む。
+#                                                              下の [4/6] で dist 直下へ置く config.ini とは別物で、
+#                                                              あちらは利用者が編集する実設定・こちらは作り直し用の原本）
+# --version-file                                          : exe プロパティへ版を埋め込む（上で生成した version_info.txt）
 #   ※ badge.py / capture.py / config.py / infra.py は import から自動で辿られるので指定不要。
-pyinstaller --noconfirm --onedir --noconsole --name edge-auto-capture --collect-all playwright --add-data "src\edge_auto_capture\badge.js;." --version-file "$verFile" src\edge_auto_capture\__main__.py
+#   ※ どちらの --add-data も infra.package_data_path が sys._MEIPASS 直下から解決する（#101）。
+pyinstaller --noconfirm --onedir --noconsole --name edge-auto-capture --collect-all playwright --add-data "src\edge_auto_capture\badge.js;." --add-data "src\edge_auto_capture\default_config.ini;." --version-file "$verFile" src\edge_auto_capture\__main__.py
 if ($LASTEXITCODE -ne 0) { Write-Host "ビルドに失敗しました。上のメッセージを確認してください。" -ForegroundColor Red; exit 1 }
 
 $dist = Join-Path $root "dist\edge-auto-capture"
 $exe  = Join-Path $dist "edge-auto-capture.exe"
 
 Write-Host "[4/6] config.ini と説明書、依存ライセンス表記を配布フォルダへ同梱します ..."
-Copy-Item -Force (Join-Path $root "config.ini") (Join-Path $dist "config.ini")
+# 利用者が編集する config.ini は、パッケージ同梱の既定テンプレートをそのままコピーして置く
+# （出所は src\edge_auto_capture\default_config.ini の 1 つだけ。ルートの config.ini は #101 で廃止）。
+Copy-Item -Force (Join-Path $root "src\edge_auto_capture\default_config.ini") (Join-Path $dist "config.ini")
 Copy-Item -Force (Join-Path $root "USAGE.txt")  (Join-Path $dist "USAGE.txt")
 if (Test-Path (Join-Path $root "LICENSE")) {
     Copy-Item -Force (Join-Path $root "LICENSE") (Join-Path $dist "LICENSE.txt")

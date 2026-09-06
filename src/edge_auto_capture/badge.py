@@ -16,8 +16,9 @@
 
 import json
 import secrets
-import sys
 from pathlib import Path
+
+from .infra import package_data_path
 
 # 操作バーの識別子。バー全体をこの id のコンテナに閉じ込める（撮影時の写り込み除外が
 # この id 前提）。
@@ -101,12 +102,11 @@ def _badge_js_path() -> Path:
     PyInstaller で凍結（frozen）した場合は同梱データの展開先（sys._MEIPASS）、
     通常実行時はこのモジュールと同じフォルダを見る。build.ps1 が
     --add-data で badge.js を _MEIPASS 直下へ同梱する前提。
+
+    frozen 判定そのものは infra.package_data_path が持つ（config.py の
+    default_config.ini も同じ解決をするので、二重に書かない・#101）。
     """
-    if getattr(sys, "frozen", False):
-        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-    else:
-        base = Path(__file__).parent
-    return base / "badge.js"
+    return package_data_path("badge.js")
 
 
 def new_namespace() -> str:

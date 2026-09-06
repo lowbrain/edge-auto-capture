@@ -227,7 +227,7 @@ def test_load_config_missing_file_self_heals(monkeypatch, tmp_path):
     c = load_config()
     # 既定ファイルが作られ、配布テンプレートと同一の内容になる。
     assert cfg.exists()
-    assert cfg.read_text(encoding="utf-8") == config_mod.DEFAULT_CONFIG_TEXT
+    assert cfg.read_text(encoding="utf-8") == config_mod._default_config_text()
     # 既定テンプレートの値で起動する（output は BASE_DIR 配下へ解決）。
     assert c.start_url == "https://www.google.com"
     assert c.output_dir == tmp_path / "output"
@@ -254,7 +254,7 @@ def test_load_config_broken_file_self_heals(monkeypatch, tmp_path):
     assert invalid.exists()
     assert invalid.read_text(encoding="utf-8").startswith("[wrong]")
     # 既定 config.ini を作り直し、既定値で起動する。
-    assert cfg.read_text(encoding="utf-8") == config_mod.DEFAULT_CONFIG_TEXT
+    assert cfg.read_text(encoding="utf-8") == config_mod._default_config_text()
     assert c.start_url == "https://www.google.com"
     assert c.output_dir == tmp_path / "output"
 
@@ -265,24 +265,44 @@ def test_load_config_corrupt_file_self_heals(monkeypatch, tmp_path):
     cfg = _write_config(monkeypatch, tmp_path, "not a config at all\n= = =\n")
     c = load_config()
     assert (tmp_path / "config.ini.invalid").exists()
-    assert cfg.read_text(encoding="utf-8") == config_mod.DEFAULT_CONFIG_TEXT
+    assert cfg.read_text(encoding="utf-8") == config_mod._default_config_text()
     assert c.output_dir == tmp_path / "output"
 
 
-def test_default_config_text_matches_bundled_ini():
-    # 自己修復で書き出す既定テキストは、配布する config.ini と同一であること（drift 防止）。
-    # read_text は改行を \n へ正規化するので、CRLF の config.ini とも一致する。
-    root = Path(__file__).resolve().parent.parent
-    bundled = (root / "config.ini").read_text(encoding="utf-8")
-    assert bundled == config_mod.DEFAULT_CONFIG_TEXT
+def test_default_config_text_reads_package_data():
+    # 既定テキストの出所はパッケージ同梱の default_config.ini ただ 1 つ（#101）。
+    # かつては config.py の DEFAULT_CONFIG_TEXT とルートの config.ini が同内容で並び、
+    # バイト一致テストで drift を押さえ込んでいた。いまは出所が 1 つなので、
+    # 「同梱ファイルを実際に読めている」ことだけを縛る（読めなければ自己修復が空を書く）。
+    package_ini = Path(config_mod.__file__).resolve().parent / config_mod.DEFAULT_CONFIG_NAME
+    assert package_ini.is_file()
+    text = config_mod._default_config_text()
+    assert text == package_ini.read_text(encoding="utf-8")
+    # 中身が既定テンプレートとして成立していること（空ファイルにすり替わっても気づける）。
+    assert text.startswith("[capture]")
+    assert "start_url" in text
 
 
 def test_config_with_defaults_uses_template_values(monkeypatch, tmp_path):
-    # DEFAULT_CONFIG_TEXT から作る既定 Config は配布テンプレートの値になる。
+    # 同梱テンプレート（default_config.ini）から作る既定 Config は配布テンプレートの値になる。
     monkeypatch.setattr(config_mod, "BASE_DIR", tmp_path)
     c = config_mod._config_with_defaults(Config())
     assert c.start_url == "https://www.google.com"
     assert c.skip_urls == ("about:blank", "")
+    assert c.output_dir == tmp_path / "output"
+
+
+def test_config_with_defaults_survives_missing_package_data(monkeypatch, tmp_path):
+    # 同梱テンプレートを読めない（配布物からの欠落・凍結時の同梱漏れ）ときも、
+    # ここは「最後の砦」なので起動不能にしない。Config の初期値で組み立てて返す
+    # （start_url は about:blank ＝ テンプレート値ではなくコード側の既定）。
+    def _boom() -> str:
+        raise OSError("default_config.ini が無い")
+
+    monkeypatch.setattr(config_mod, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(config_mod, "_default_config_text", _boom)
+    c = config_mod._config_with_defaults(Config())
+    assert c.start_url == "about:blank"
     assert c.output_dir == tmp_path / "output"
 
 
