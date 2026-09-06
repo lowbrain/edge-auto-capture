@@ -1,7 +1,7 @@
 """設定読み込み（config.py）のユニットテスト。
 
-config.ini のパース・既定値へのフォールバック・自己修復（D-C3）・保存先の解決と
-セッションフォルダ（F-C3）・撮影対象 URL の判定（should_capture）を守る。
+config.ini のパース・既定値へのフォールバック・自己修復・保存先の解決と
+セッションフォルダ・撮影対象 URL の判定（should_capture）を守る。
 実 Edge 不要（config は infra だけに依存し Playwright を import しない）。
 
 実行:
@@ -19,7 +19,7 @@ from edge_auto_capture import config as config_mod
 from edge_auto_capture.config import Config, ConfigFatalError, load_config, should_capture
 
 # session_stamp の実装本体への参照（conftest の autouse フィクスチャが "" へ差し替える前に押さえる）。
-# 差し替え後も本物の書式を検証できるようにするため（F-C3）。
+# 差し替え後も本物の書式を検証できるようにするため。
 _REAL_SESSION_STAMP = config_mod.session_stamp
 
 
@@ -35,7 +35,7 @@ def test_config_defaults():
     assert c.eval_timeout == 5000
     assert c.start_recording is False
     assert "" in c.skip_urls  # 空URLは常にスキップ対象
-    assert c.allow_urls == ()  # 既定は無効（撮る URL を絞らない。F-C2）
+    assert c.allow_urls == ()  # 既定は無効（撮る URL を絞らない）
 
 
 def test_eval_timeout_sec_converts_milliseconds_to_seconds():
@@ -45,7 +45,7 @@ def test_eval_timeout_sec_converts_milliseconds_to_seconds():
 
 
 # --------------------------------------------------------------------------- #
-# should_capture（skip_urls / allow_urls / 前方一致・fnmatch。R3/F-C2/B-5）
+# should_capture（skip_urls / allow_urls / 前方一致・fnmatch）
 # --------------------------------------------------------------------------- #
 
 
@@ -65,7 +65,7 @@ def test_should_capture_empty_pattern_only_matches_empty_url():
 
 
 def test_should_capture_skip_is_prefix_match_so_query_still_skipped():
-    # 完全一致だとクエリ付きで漏れていた（B-5）。前方一致でクエリ付きも弾く。
+    # 完全一致だとクエリ付きで漏れていた。前方一致でクエリ付きも弾く。
     c = Config(skip_urls=("https://skip.me", ""))
     assert should_capture("https://skip.me", c) is False
     assert should_capture("https://skip.me?ref=1", c) is False
@@ -82,7 +82,7 @@ def test_should_capture_skip_supports_wildcards():
 
 
 def test_should_capture_allow_urls_whitelist_skips_others():
-    # allow_urls 指定時は、合致しない URL をすべてスキップ（F-C2）。
+    # allow_urls 指定時は、合致しない URL をすべてスキップ。
     c = Config(allow_urls=("https://example.com/",), skip_urls=("",))
     assert should_capture("https://example.com/page", c) is True
     assert should_capture("https://other.com/", c) is False
@@ -143,10 +143,10 @@ start_recording = true
     assert c.eval_timeout == 4000
     # 指定した skip_urls ＋ 常に付く空URL。
     assert c.skip_urls == ("about:blank", "https://skip.me", "")
-    # allow_urls は指定値のみ（空URL番兵は付けない。F-C2）。
+    # allow_urls は指定値のみ（空URL番兵は付けない）。
     assert c.allow_urls == ("https://example.com/", "https://*.example.com/*")
     assert c.target_selector == ".price"
-    # カンマ区切りをタプル化（空要素は落とす。F-B2）。
+    # カンマ区切りをタプル化（空要素は落とす）。
     assert c.hide_selectors == ("#cookie-banner", ".sticky-header")
     assert c.start_recording is True
 
@@ -202,7 +202,7 @@ output_dir = {out}
 
 
 def test_load_config_reads_bom_prefixed_file(monkeypatch, tmp_path):
-    # メモ帳保存等で BOM が付いても読めること（A-6）。utf-8 のままだと最初の見出しが
+    # メモ帳保存等で BOM が付いても読めること。utf-8 のままだと最初の見出しが
     # 壊れて MissingSectionHeaderError → 起動不能になっていた。
     out = tmp_path / "out"
     cfg = tmp_path / "config.ini"
@@ -219,7 +219,7 @@ def test_load_config_reads_bom_prefixed_file(monkeypatch, tmp_path):
 
 
 def test_load_config_missing_file_self_heals(monkeypatch, tmp_path):
-    # D-C3: config.ini が無ければ既定値で作り直して起動する（起動不能にしない）。
+    # config.ini が無ければ既定値で作り直して起動する（起動不能にしない）。
     monkeypatch.setattr(config_mod, "BASE_DIR", tmp_path)
     cfg = tmp_path / "does-not-exist.ini"
     monkeypatch.setattr(config_mod, "CONFIG_PATH", cfg)
@@ -245,7 +245,7 @@ def test_load_config_missing_file_uses_defaults_when_unwritable(monkeypatch, tmp
 
 
 def test_load_config_broken_file_self_heals(monkeypatch, tmp_path):
-    # D-C3: [capture] が無い/破損した config.ini は .invalid へ退避し、既定で作り直す。
+    # [capture] が無い/破損した config.ini は .invalid へ退避し、既定で作り直す。
     monkeypatch.setattr(config_mod, "BASE_DIR", tmp_path)
     cfg = _write_config(monkeypatch, tmp_path, "[wrong]\nfoo = bar\n")
     c = load_config()
@@ -352,7 +352,7 @@ output_dir = {out}
 
 
 def test_load_config_unwritable_output_dir_raises_fatal(monkeypatch, tmp_path):
-    # 保存先がどこにも書けない（D-C1 の退避先も全滅）ときも、config は落とさず
+    # 保存先がどこにも書けない（退避先も全滅）ときも、config は落とさず
     # ConfigFatalError で返す（#49）。文面には元の保存先と直し方を載せる。
     out = tmp_path / "out"
     _write_config(
@@ -373,7 +373,7 @@ output_dir = {out}
 
 
 # --------------------------------------------------------------------------- #
-# profile_dir（F-C1: プロファイル永続化のオプトイン）
+# profile_dir（プロファイル永続化のオプトイン）
 # --------------------------------------------------------------------------- #
 
 
@@ -427,7 +427,7 @@ profile_dir = {prof}
 
 
 # --------------------------------------------------------------------------- #
-# セッションフォルダ（F-C3: 起動単位で output_dir の下に 1 段挟む）
+# セッションフォルダ（起動単位で output_dir の下に 1 段挟む）
 # --------------------------------------------------------------------------- #
 
 
@@ -438,7 +438,7 @@ def test_session_stamp_format():
 
 
 def test_load_config_inserts_session_folder(monkeypatch, tmp_path):
-    # F-C3: 確定した output_dir の直下へ、起動時刻のセッションフォルダを 1 段挟む。
+    # 確定した output_dir の直下へ、起動時刻のセッションフォルダを 1 段挟む。
     # 実時刻由来だとテストが不安定なので session_stamp を固定値へ差し替える
     #（autouse フィクスチャは "" にしているが、ここでは実挿入を検証するため上書きする）。
     monkeypatch.setattr(config_mod, "session_stamp", lambda: "2026-08-11_143025")
@@ -499,7 +499,7 @@ output_dir = {out}
 
 
 # --------------------------------------------------------------------------- #
-# summarize_config（D-B2: 採用された設定値を 1 行で残す）
+# summarize_config（採用された設定値を 1 行で残す）
 # --------------------------------------------------------------------------- #
 
 
