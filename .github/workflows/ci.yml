@@ -3,7 +3,7 @@
 # PR（と main への push）のたびに機械的に回帰を止める保険。ローカル確認忘れを保険する。
 #   - lint    : ruff（現状 0 件）+ mypy（配布コード本体）を Linux で
 #   - test    : pytest（速い純粋関数・token 照合・DL の回帰）を Linux で。
-#               requires-python=">=3.9" を守るため 3.9 と 3.12 の両方で回す。
+#               requires-python=">=3.10" を守るため 3.10 と 3.13 の両方で回す。
 #   - smoke   : 実 Edge を要する操作バー JS の検証。--strict でブラウザ不在を FAIL 化。
 #               Edge が要るので Windows ランナー限定。push/PR で自動 + 手動でも起動可。
 #
@@ -11,8 +11,9 @@
 #   - pytest / smoke は playwright パッケージ（依存）を import するが、pytest 側は
 #     ブラウザを起動しないので `playwright install`（ブラウザバイナリDL）は不要。
 #     smoke は windows-latest に同梱の Edge を channel="msedge" で使うため同様に不要。
-#   - mypy は python_version=3.10 を pyproject で固定済み（新しい mypy は 3.9 ターゲット廃止）。
-#     ランナーは 3.12 で回す（検査対象は 3.10 相当のまま）。3.9 で mypy は回さない。
+#   - mypy は python_version=3.10 を pyproject で固定済み（requires-python / ruff の
+#     target-version と揃えてある）。ランナーの版に関わらず検査対象は 3.10 相当なので、
+#     lint ジョブは 1 版だけで回す（matrix にしない）。
 name: CI
 
 on:
@@ -50,7 +51,7 @@ jobs:
         run: ruff check .
       # 検査対象をここに列挙しない（`mypy .` にする）。コマンドライン引数は
       # pyproject の [tool.mypy] files を上書きするため、ここへ書くと pyproject 側を
-      # files = ["."] + exclude 方式（CONTRIBUTING §1-10）にしていても
+      # files = ["."] + exclude 方式（[tool.mypy] のコメント参照）にしていても
       # CI だけ検査対象から漏れ、型エラーが黙って素通りする。出所は pyproject に一本化する。
       - name: mypy
         run: mypy .
@@ -61,8 +62,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 配布は requires-python=">=3.9"。最小(3.9)と現行(3.12)の両端で回す。
-        python-version: ["3.9", "3.12"]
+        # 配布は requires-python=">=3.10"。最小(3.10)と現行(3.13)の両端で回す。
+        python-version: ["3.10", "3.13"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
