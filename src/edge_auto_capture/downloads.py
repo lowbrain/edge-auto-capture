@@ -1,6 +1,6 @@
 """ダウンロードの退避。保存先規約・衝突回避・実際の退避処理をまとめる。
 
-以前は edge_auto_capture.py の CaptureSession が直接持っていた。撮影物の保存先規約を
+以前は当時の edge_auto_capture.py（現 app.py）の CaptureSession が直接持っていた。撮影物の保存先規約を
 lineage.py が持っているのと同じ粒度の関心事なのに本体へ同居していたため、独立モジュールへ
 切り出した（#59）。系譜（lineage）の解決（_resolve_group）はページ集合の状態を持つ
 CaptureSession 側の責務のまま残し、ここでは「group_id が決まったあとの保存」だけを担う。

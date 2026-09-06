@@ -5,13 +5,13 @@
 - ページ → 所属グループの解決・メモ化と、ページ消滅時の後始末を担うレジストリ（LineageRegistry）
 
 以前は capture.py のモジュール関数（group_stamp / group_folder_name / group_subdir）と、
-edge_auto_capture.py の CaptureSession が持つ groups / page_root および
+当時の edge_auto_capture.py（現 app.py）の CaptureSession が持つ groups / page_root および
 _resolve_group / _make_group / _find_root に分かれていた。系譜まわりの規約と解決ロジックを
 1 か所へ寄せ、状態の所在を明確にし単体テストしやすくするために新設した（#36）。
 「既存クラスの移動」ではなく「新設して寄せた」もの。
 
 capture.py は保存先の組み立てとログ表記に group_folder_name / group_subdir を、
-edge_auto_capture.py は注釈と保存先の解決に GroupState / group_subdir 等を、それぞれここから
+app.py は注釈と保存先の解決に GroupState / group_subdir 等を、それぞれここから
 import して使う。結果として capture.group_subdir のような経路でも辿れてしまうが、それに依存する
 コードは無い（テストも lineage から直接 import する。#53）。系譜の規約を参照する側は
 このモジュールから import すること。
