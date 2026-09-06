@@ -66,10 +66,21 @@
    > **経路を混ぜず `iconv` で統一する** — 厳しい側なので、間違えても黙って壊れずエラーで止まる。
    > 実測値と手順の詳細はスキル [`.claude/skills/usage-txt/SKILL.md`](.claude/skills/usage-txt/SKILL.md)。
 
-5. **バインディング名は 2 箇所に存在** — `badge.py` の `BIND_*` 定数群と、
-   `badge.js` 内の `BINDING_NAMES` / `callBinding('__eac_*')`。言語境界のため一元化できていない。
-   片方だけ変えると **無言失敗する**（気づけない）。
-   `badge.js` 側でバインディングを追加するときは `BINDING_NAMES` にも足すこと。
+5. **バインディング名の出所は `badge.py` の `BIND_*` 1 箇所。`badge.js` に名前は無い**（#100）。
+   名前は `badge.py` の `_BIND_NAMES`（キー＝JS 側の呼び名、値＝`BIND_*`）に載って設定 JSON の
+   `bind` キーで配られ、`badge.js` 側は `Object.values(C.bind)` を退避＋削除の対象にし、
+   呼び出しは `callBinding(C.bind.toggle, TOK, …)` の形で行う。
+   **`badge.js` に `__eac_` で始まる文字列リテラルを書き戻さないこと**（二重管理が復活する。
+   `tests/test_badge.py` が落とす）。
+   バインディングを増やすときは (1) `BIND_*` を足し (2) `_BIND_NAMES` に載せ
+   (3) `app.py` で `expose_binding` し (4) `badge.js` で `C.bind.<キー>` を呼ぶ。
+   **どれを忘れても無言失敗する**（`callBinding` が `BOUND` から引けず `undefined` を返して終わり。
+   例外もログも出ず、ボタンだけが効かなくなる）ので、(1)〜(3) の食い違いは
+   `tests/test_badge.py` が、実際の発火は `tests/smoke_badge.py` が見る。
+
+   > **§1-6 の呼び出し例について**: 同節に `callBinding('__eac_toggle', TOK, ...)` と
+   > 名前を直に書いた例が残っているが、いまの正しい形は `callBinding(C.bind.toggle, TOK, ...)`。
+   > 「`callBinding` 経由で呼ぶ」という §1-6 の趣旨は変わらない。
 
 6. **`badge.js` のシャドウは `closed`・呼び出しは `callBinding` 経由**。
    - `host.shadowRoot` は `null` を返す。中を触るテストは

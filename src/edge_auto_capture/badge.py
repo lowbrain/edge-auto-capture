@@ -151,6 +151,9 @@ def build_badge_script(
     まとめる。固定名を window に生やさないので、サイトから固定名で存在検知できなくなる。
     空（既定）のときは公開しない（見た目だけ確認するテスト用ビルドで、ヘルパを呼ばない場面）。
 
+    バインディング名（__eac_* 群）も設定の bind キーに載せて配る（#100）。badge.js 側は
+    その値を使うだけで、JS には名前のリテラルが無い。**名前の出所は下の BIND_* 1 箇所。**
+
     渡し方は「badge.js 全体を 1 個の関数式として呼び出す」形（#99）。以前は badge.js 中の
     目印 "$CONFIG" を単純置換していたが、そのせいで badge.js ではテンプレートリテラルの
     `${...}` 補間が使えなかった（`$CONFIG` と衝突しうるため）。引数で渡す形にすると、
@@ -159,7 +162,12 @@ def build_badge_script(
     \\uXXXX に安全化する。badge.js の末尾は `}`（セミコロン無し）である前提。
     """
     config = dict(
-        _BADGE_CONFIG, tok=token, settleMs=settle_ms, hideSel=list(hide_selectors), ns=ns
+        _BADGE_CONFIG,
+        tok=token,
+        settleMs=settle_ms,
+        hideSel=list(hide_selectors),
+        ns=ns,
+        bind=_BIND_NAMES,
     )
     src = _badge_js_path().read_text(encoding="utf-8")
     return f"({src})({json.dumps(config)});"
@@ -173,9 +181,12 @@ def build_badge_script(
 # 呼ぶ（＝遅延化）。これで import 時 I/O を無くした。
 
 # --- expose_binding で公開するバインディング名（ページ側 → Python の呼び出し口）---
-# badge.js 内の window.__eac_* 呼び出し名と 1:1 で一致させること。言語境界をまたぐため
-# 完全な一元化はできないが、Python 側の名前をここへ集約して「唯一の一覧」を持つ
-# （綴りずれは JS 側 try/catch で無言失敗するので、実発火はスモークテストで確認している）。
+# **名前の出所はここだけ**（#100）。以前は badge.js 側にも同じ 8 個の文字列リテラルが
+# 並んでいて、片方だけ変えると無言失敗した（callBinding が BOUND から引けず undefined を
+# 返して終わり。例外もログも出ず、ボタンだけが効かなくなる）。いまは下の _BIND_NAMES に
+# 載せて設定 JSON の bind キーで JS へ配るので、JS 側に名前は無く、片側漏れが構造的に
+# 起こらない。名前を増やすときは (1) ここに BIND_* を足し (2) _BIND_NAMES に載せ
+# (3) app.py で expose_binding し (4) badge.js で C.bind.<キー> を呼ぶ。
 BIND_TOGGLE = "__eac_toggle"                  # 記録開始/停止
 BIND_SHOT = "__eac_shot"                       # 今すぐ1枚
 BIND_OPEN_FOLDER = "__eac_open_folder"         # 保存先フォルダを開く
@@ -184,6 +195,21 @@ BIND_SET_SELECTOR = "__eac_set_selector"       # セレクタ入力（変更の�
 BIND_COMMIT_SELECTOR = "__eac_commit_selector" # セレクタ確定（blur/Enter）
 BIND_SPA_CHANGED = "__eac_spa_changed"         # SPA検知の変化通知
 BIND_GETSTATE = "__eac_getstate"               # 描画前の状態問い合わせ
+
+# badge.js へ配るバインディング名。キーは JS 側の呼び名（C.bind.<キー>）、値が実際に
+# expose_binding される名前。badge.js は `Object.values(C.bind)` を退避＋削除の対象にし、
+# 各呼び出しを `callBinding(C.bind.<キー>, TOK, …)` の形で行う。
+# **BIND_* を足したらここにも載せること**（載せ忘れは tests/test_badge.py が落とす）。
+_BIND_NAMES = {
+    "toggle": BIND_TOGGLE,
+    "shot": BIND_SHOT,
+    "openFolder": BIND_OPEN_FOLDER,
+    "spaToggle": BIND_SPA_TOGGLE,
+    "setSelector": BIND_SET_SELECTOR,
+    "commitSelector": BIND_COMMIT_SELECTOR,
+    "spaChanged": BIND_SPA_CHANGED,
+    "getState": BIND_GETSTATE,
+}
 
 # --- capture 側が page.evaluate で呼ぶ、ページ側ヘルパの呼び出し式 ---
 # ヘルパは固定名を window に生やさず、起動ごとのランダム名 ns（new_namespace()）の下へ
