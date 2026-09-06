@@ -65,7 +65,7 @@ def browser_launch_kwargs(
         # 固定ビューポートのエミュレーションを外し、ウィンドウサイズにページを
         # 追従させる（--start-maximized も no_viewport でないと効かない）。
         no_viewport=True,
-        # ダウンロードを受理する（E-4）。既定でも真だが意図を明示する。
+        # ダウンロードを受理する。既定でも真だが意図を明示する。
         # ただし accept_downloads / downloads_path だけでは足りない: Playwright は
         # どちらの場合もコンテキスト終了時にダウンロードを削除するため（実機で確認）、
         # 別途 download イベントで save_as して退避する（CaptureSession.on_download）。
