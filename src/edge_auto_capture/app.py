@@ -50,7 +50,7 @@ import secrets
 import shutil
 import sys
 import tempfile
-from collections.abc import Callable, Coroutine, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Optional
@@ -187,25 +187,6 @@ class CaptureSession:
     @property
     def page_root(self) -> Mapping[Page, Page]:
         return MappingProxyType(self._lineage.page_root)
-
-    # ページ側 → Python のバインディング名（badge.BIND_*）と、それを受けるメソッド名の対応表。
-    # setup() はこれを回して expose_binding するだけなので、バインディングを増やすときに
-    # 触るのはこの表の 1 行だけになる（以前は setup() 内に 8 行が直書きで並んでいた）。
-    # badge.py の BIND_*（＝badge.js の BINDING_NAMES）と 1:1 で揃っていること。1 行落とすと
-    # ページ側は callBinding が BOUND から引けず undefined を返して終わり、例外もログも出ずに
-    # ボタンだけが効かなくなる（CONTRIBUTING §1-5）。
-    # tests/test_badge.py の test_setup_exposes_exactly_the_declared_bindings が、この表では
-    # なく setup() の実挙動（何が公開されたか）を見て過不足を落とす。
-    _BINDINGS = (
-        (badge.BIND_TOGGLE, "on_toggle"),
-        (badge.BIND_SHOT, "on_shot"),
-        (badge.BIND_OPEN_FOLDER, "on_open_folder"),
-        (badge.BIND_SPA_TOGGLE, "on_spa_toggle"),
-        (badge.BIND_SET_SELECTOR, "on_set_selector"),
-        (badge.BIND_COMMIT_SELECTOR, "on_commit_selector"),
-        (badge.BIND_SPA_CHANGED, "on_spa_changed"),
-        (badge.BIND_GETSTATE, "get_state"),
-    )
 
     # ---- ページ側とのやり取り ----
 
@@ -503,9 +484,32 @@ class CaptureSession:
             )
             self._track_page(pg)
         # バインディング名は badge.py の BIND_* に集約（badge.js 側の呼び出し名と一致）。
-        # 名前とメソッドの対応は _BINDINGS（上のクラス定数）が持ち、ここは回すだけにする。
-        for name, method in self._BINDINGS:
-            await self.context.expose_binding(name, getattr(self, method))
+        # ページ側 → Python のバインディング名（badge.BIND_*）と、それを受けるメソッドの対応表。
+        # 下の for はこれを回して expose_binding するだけなので、バインディングを増やすときに
+        # 触るのはこの表の 1 行だけになる（以前は setup() 内に 8 行が直書きで並んでいた）。
+        # badge.py の BIND_*（＝badge.js の BINDING_NAMES）と 1:1 で揃っていること。1 行落とすと
+        # ページ側は callBinding が BOUND から引けず undefined を返して終わり、例外もログも出ずに
+        # ボタンだけが効かなくなる（CONTRIBUTING §1-5）。
+        # tests/test_badge.py の test_setup_exposes_exactly_the_declared_bindings が、この表では
+        # なく setup() の実挙動（何が公開されたか）を見て過不足を落とす。
+        # かつてはクラス定数 _BINDINGS がメソッド「名の文字列」を持ち getattr(self, ...) で
+        # 引いていたが、それだとメソッドを改名しても mypy も ruff も何も言わず、起動して
+        # AttributeError になるまで気づけなかった（#102）。束縛メソッドを直接持てば mypy が
+        # 未定義属性として落とす。クラス定数のままだと self が無いのでここ（setup 内）で組む。
+        # 型で守れるのは**属性名の解決であって戻り値ではない** — get_state だけ dict を返し
+        # 他は None を返すため、要素の型は Callable[..., Awaitable[Any]] まで緩めてある。
+        bindings: tuple[tuple[str, Callable[..., Awaitable[Any]]], ...] = (
+            (badge.BIND_TOGGLE, self.on_toggle),
+            (badge.BIND_SHOT, self.on_shot),
+            (badge.BIND_OPEN_FOLDER, self.on_open_folder),
+            (badge.BIND_SPA_TOGGLE, self.on_spa_toggle),
+            (badge.BIND_SET_SELECTOR, self.on_set_selector),
+            (badge.BIND_COMMIT_SELECTOR, self.on_commit_selector),
+            (badge.BIND_SPA_CHANGED, self.on_spa_changed),
+            (badge.BIND_GETSTATE, self.get_state),
+        )
+        for name, handler in bindings:
+            await self.context.expose_binding(name, handler)
         # badge.js には今回の合言葉（token）と SPA検知のデバウンス時間（settle_delay をミリ秒へ）を
         # 埋め込む。token は各バインディング呼び出しの照合、settle は落ち着き判定に使う。
         settle_ms = int(self.config.settle_delay * 1000)
