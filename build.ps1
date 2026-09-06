@@ -29,7 +29,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host "依存のインストールに失敗し�
 
 Write-Host "[2/6] exe プロパティ用のバージョン情報ファイルを生成します ..."
 # 右クリック→プロパティ→詳細でバージョンが見えるようにする（--version-file）。
-# 版の出所は infra.__version__ に一本化（D-B1）。ここで直書きせず Python から取り出す。
+# 版の出所は infra.__version__ に一本化。ここで直書きせず Python から取り出す。
 # 直前の pip install -e ".[build]" で edge_auto_capture がインストール済みなので import できる。
 $ver = (python -c "import edge_auto_capture.infra as infra; print(infra.__version__)")
 if ($LASTEXITCODE -ne 0) { Write-Host "バージョンの取得に失敗しました。" -ForegroundColor Red; exit 1 }
@@ -85,7 +85,7 @@ Copy-Item -Force (Join-Path $root "USAGE.txt")  (Join-Path $dist "USAGE.txt")
 if (Test-Path (Join-Path $root "LICENSE")) {
     Copy-Item -Force (Join-Path $root "LICENSE") (Join-Path $dist "LICENSE.txt")
 }
-# D-A2: 同梱する依存（Playwright など）のライセンス表記をまとめて配布物へ入れる。
+# 同梱する依存（Playwright など）のライセンス表記をまとめて配布物へ入れる。
 # pip-licenses が無ければ導入を試み、失敗しても配布自体は止めない（警告のみ）。
 $notices = Join-Path $dist "THIRD-PARTY-NOTICES.txt"
 pip install pip-licenses *> $null
@@ -98,17 +98,17 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "         手動で依存ライセンスを $notices にまとめてください。" -ForegroundColor Yellow
 }
 
-# output/ を空のまま同梱する。展開時点で書き込み可否が分かり、D-C1（書き込み不可
-# フォールバック）の権限問題に早く気づける。Compress-Archive は空フォルダを ZIP に
+# output/ を空のまま同梱する。展開時点で書き込み可否が分かり、書き込み不可時の
+# フォールバックの権限問題に早く気づける。Compress-Archive は空フォルダを ZIP に
 # 含めないため、フォルダを保持する目的も兼ねて利用者向けの説明ファイルを 1 つ置く。
 $outDir = Join-Path $dist "output"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-$outNote = "スクリーンショットとテキストはこのフォルダに保存されます。ここに書き込めない場合は %LOCALAPPDATA% 側へ自動で切り替わります（D-C1）。"
+$outNote = "スクリーンショットとテキストはこのフォルダに保存されます。ここに書き込めない場合は %LOCALAPPDATA% 側へ自動で切り替わります。"
 Set-Content -Encoding utf8 -Path (Join-Path $outDir "このフォルダについて.txt") -Value $outNote
 Write-Host "  空の output/ を同梱しました: $outDir" -ForegroundColor Green
 
 Write-Host "[5/6] コードサイニング署名 ..."
-# D-D1: 署名の受け口。証明書の指定が無ければ何もせず素通りする（現状どおり未署名）。
+# 署名の受け口。証明書の指定が無ければ何もせず素通りする（現状どおり未署名）。
 #       証明書を入手したら -CertPath か -CertThumbprint を渡すだけで署名できる。
 if ($CertPath -ne "" -or $CertThumbprint -ne "") {
     $signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
@@ -132,7 +132,7 @@ if ($CertPath -ne "" -or $CertThumbprint -ne "") {
 }
 
 Write-Host "[6/6] 配布用 ZIP と SHA256 を作成します ..."
-# D-D3: 配布 ZIP と、その SHA256 を併記する（署名が無い間の完全性確認手段）。
+# 配布 ZIP と、その SHA256 を併記する（署名が無い間の完全性確認手段）。
 $zip    = Join-Path $root "dist\edge-auto-capture.zip"
 $sha    = "$zip.sha256"
 if (Test-Path $zip) { Remove-Item -Force $zip }

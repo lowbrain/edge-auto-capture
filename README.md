@@ -74,14 +74,14 @@ Microsoft Edge（無ければ Google Chrome）で開いたページを、**記�
 
 ## 既知の制限（非 HTML ページ）
 
-Edge 実機で確認した挙動（Edge 152 / `E-5`）。クラッシュはせず、処理は握られて続行する。
+Edge 実機で確認した挙動（Edge 152）。クラッシュはせず、処理は握られて続行する。
 
 - **PDF（Edge 内蔵ビューア）はテキストが保存されない**。`.png` は表示中ページが画像として
   保存されるが、`.txt` / `_part.txt` は**空**になる（ビューアが本文 DOM を持たないため）。
   `page.title()` も空を返すので、ファイル名末尾の識別名は URL 由来のフォールバックになる。
   → **PDF の証跡は画像（.png）でのみ残る**と理解しておくこと。テキストが要るなら別途 PDF を保存する。
 - **Excel / Word など Edge が描画しない形式はダウンロードされる**ため、この制限は当てはまらない。
-  タブ内では開かず download イベントが飛び、`downloads/` へ**元ファイルのまま保存**される（`E-4`）。
+  タブ内では開かず download イベントが飛び、`downloads/` へ**元ファイルのまま保存**される。
 - **`edge://` 系（`edge://settings` 等）の特権ページには操作バーが注入されない**
   （ブラウザが外部スクリプト注入を禁止する領域のため）。スクリーンショット自体は撮れる。
 
@@ -107,7 +107,7 @@ edge-auto-capture/
 │     ├─ browser.py       Edge/Chrome の起動候補と起動オプションの組み立て
 │     ├─ badge.py         操作バーのページ側JS組み立て（表示文言→$CONFIG／バインディング名）
 │     ├─ badge.js         操作バーのページ側JS本体（実ファイル・package-data）
-│     └─ downloads.py     ダウンロードの保存先解決とファイル退避（E-4）
+│     └─ downloads.py     ダウンロードの保存先解決とファイル退避
 ├─ tests/                 テストと conftest.py（構成は下の「テスト」節）
 ├─ .github/workflows/ci.yml  CI（ruff+mypy / pytest / smoke --strict）
 ├─ config.ini             既定の設定ファイル
@@ -215,7 +215,7 @@ PyInstaller が `dist\edge-auto-capture\` を生成し、`config.ini` / `USAGE.t
 実行時は `sys._MEIPASS` から読み込まれる（`badge.py` `capture.py` は import から自動で辿られる）。
 最後に配布用の `dist\edge-auto-capture.zip` と、その `*.zip.sha256`（完全性確認用）を作る。
 
-#### コードサイニング署名（任意・`D-D1`）
+#### コードサイニング署名（任意）
 
 証明書を持っている場合はビルド時に署名できる。指定が無ければ署名ステップは素通りし、
 現状どおり未署名で配布される。
@@ -262,7 +262,7 @@ edge-auto-capture\
 
 ### 配布前の確認
 
-- **アンチウイルスの誤検知（`D-D2`）** — PyInstaller 製バイナリはヒューリスティックで誤検知されやすい。
+- **アンチウイルスの誤検知** — PyInstaller 製バイナリはヒューリスティックで誤検知されやすい。
   `--onedir`（`--onefile` より誤検知しにくい）は採用済み。**配布前に主要な AV で一度確認**しておく。
   出る場合は署名するかベンダーへ誤検知報告。技術改修ではなく都度対応の運用事項。
 - **配布物のサイズ実測** — `--collect-all playwright` は Node ドライバごと同梱するため
