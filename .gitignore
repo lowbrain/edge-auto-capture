@@ -16,6 +16,13 @@ venv/
 output/
 log.txt
 
+# 開発時にカレントディレクトリへ自己修復で生成される実設定（#101）。
+# 出所は src/edge_auto_capture/default_config.ini（package-data）1 つだけで、
+# ここへ生成されるのはその写し。追跡すると二重管理へ逆戻りする。
+# .invalid は破損時の退避ファイル（config.py の _recover_broken_config）。
+/config.ini
+/config.ini.invalid
+
 # Claude Code
 # ローカル設定（settings.local.json）と作業用ワークツリーは追跡しないが、
 # スキル定義（.claude/skills/）はリポジトリの資産なので追跡する。

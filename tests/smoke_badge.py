@@ -138,20 +138,47 @@ def run(strict: bool = False) -> int:
             if peek != "ok":
                 errors.append(f"透過トグルが機能していません: {peek}")
 
-            # 6b) 「保存先」ボタンが存在し、押すと open_folder バインディングを呼ぶか。
+            # 6b) 各操作（記録開始/停止・今すぐ1枚・保存先・SPA検知トグル・セレクタ入力/確定）が、
+            #     対応するバインディング名を実際に呼ぶか。名前は badge.py の BIND_*（唯一の出所）を
+            #     Python 側から渡し、ページで実際に発火した名前と突き合わせる。これで
+            #     「JS 側のキー（C.bind.<キー>）と Python 側の名前の対応がずれていないか」まで見る
+            #     （#100 でバインディング名を設定 JSON 経由に一元化したため、ずれるとしたらここ）。
             #     expose_binding を公開しないスモークでは、callBinding のフォールバック
             #     （退避が空なら実行時 window を見る）で後差しの関数が拾われる（SPA 検知と同じ）。
-            open_folder = page.evaluate(
-                "(() => { window.__openCalls = [];"
-                " window.__eac_open_folder = (tok) => { window.__openCalls.push(tok); };"
+            #     透過（peek）ボタンだけはローカル状態なので、何も呼ばないことも確認する。
+            expected_calls = [
+                badge.BIND_TOGGLE, badge.BIND_SHOT, badge.BIND_OPEN_FOLDER,
+                badge.BIND_SPA_TOGGLE, badge.BIND_SET_SELECTOR, badge.BIND_COMMIT_SELECTOR,
+            ]
+            buttons = page.evaluate(
+                "((names) => { window.__calls = [];"
+                " names.forEach((n) => { window[n] = function () { window.__calls.push(n); }; });"
                 " const sr = window.__eac_debugRoot && window.__eac_debugRoot();"
-                " const btn = sr && sr.querySelector('[data-eac=\"open\"]');"
-                " if (!btn) return 'missing';"
-                " btn.click();"
-                " return window.__openCalls.length === 1 ? 'ok' : 'no-call'; })()"
+                " if (!sr) return { err: 'no-root' };"
+                " const q = (n) => sr.querySelector('[data-eac=\"' + n + '\"]');"
+                " const toggle = q('toggle'), shot = q('shot'), open = q('open');"
+                " const spa = q('spa'), peek = q('peek'), sel = q('selector');"
+                " if (!toggle || !shot || !open || !spa || !peek || !sel) return { err: 'missing' };"
+                " toggle.click(); shot.click(); open.click(); spa.click();"
+                " const beforePeek = window.__calls.length;"
+                " peek.click();"  # 透過はローカル状態（Python へ通知しない）
+                " const peekQuiet = window.__calls.length === beforePeek;"
+                " peek.click();"  # 透過を元へ戻す
+                " sel.value = '#smoke';"
+                " sel.dispatchEvent(new Event('input', { bubbles: true }));"
+                " sel.dispatchEvent(new Event('change', { bubbles: true }));"
+                " return { calls: window.__calls, peekQuiet: peekQuiet }; })",
+                expected_calls,
             )
-            if open_folder != "ok":
-                errors.append(f"「保存先」ボタンが機能していません: {open_folder}")
+            if buttons.get("err"):
+                errors.append(f"操作バーの要素が見つかりません: {buttons['err']}")
+            elif buttons["calls"] != expected_calls:
+                errors.append(
+                    "ボタン操作が対応するバインディングを呼んでいません"
+                    f"（実際={buttons['calls']} / 期待={expected_calls}）"
+                )
+            elif not buttons["peekQuiet"]:
+                errors.append("透過トグルが Python へ通知しています（ローカル状態のはず）")
 
             # 6c) セレクタ入力欄の datalist に候補が入り、input が list 属性で紐づくか。
             #     setHistory で候補を配り、datalist の <option> と input.list が一致するか見る。
@@ -388,7 +415,7 @@ def run(strict: bool = False) -> int:
         return 1
     print(
         "PASS: 操作バーの構築・ヘルパ動作・シャドウ closed・透過トグル・"
-        "保存先フォルダを開く・セレクタ履歴・"
+        "全ボタンのバインディング実発火・セレクタ履歴・"
         "SPA検知の通知・フラッシュ写り込み防止・退避済み即解決・"
         "Observer の必要時のみ稼働・撮影カウンタ/失敗フラッシュ・"
         "撮影中バナー除去・固定名の存在検知不能化・JSエラー無しを確認しました。"

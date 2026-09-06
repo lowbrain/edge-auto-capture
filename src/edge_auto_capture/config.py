@@ -13,10 +13,17 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
-from .infra import BASE_DIR, log, notify_fatal, resolve_writable_dir, set_log_dir
+from .infra import BASE_DIR, log, notify_fatal, package_data_path, resolve_writable_dir, set_log_dir
 
 # 設定ファイルのパス（基準フォルダ固定）。
 CONFIG_PATH = BASE_DIR / "config.ini"
+
+# 同梱する既定 config.ini（package-data）のファイル名。badge.js と同じ仕組みで
+# パッケージに入れて配る（pyproject の [tool.setuptools.package-data]・build.ps1 の
+# --add-data）。中身をここへ文字列で持たない: かつては DEFAULT_CONFIG_TEXT という
+# 約 60 行のリテラルとルートの config.ini が同内容で並び、バイト一致テストで
+# drift を押さえ込んでいた（#101 で出所を .ini 側 1 つにした）。
+DEFAULT_CONFIG_NAME = "default_config.ini"
 
 
 class ConfigFatalError(Exception):
@@ -31,75 +38,6 @@ class ConfigFatalError(Exception):
     コードの決定は入口（edge_auto_capture.cli）の 1 か所に集める。
     """
 
-# 自己修復で書き出す既定 config.ini の中身。配布する config.ini と同一
-# （drift はテスト test_default_config_text_matches_bundled_ini で担保する）。
-# 削除・破損しても notify_fatal→exit で起動不能にせず、これで作り直して既定値で起動する。
-# 改行は LF で持ち、write_text がプラットフォームの改行へ変換する（Windows なら CRLF）。
-DEFAULT_CONFIG_TEXT = """\
-[capture]
-# ブラウザを起動したときに最初に開くページ（空なら about:blank）
-# 例: https://example.com  /  https://www.google.com
-start_url = https://www.google.com
-
-# 使うブラウザ（edge / chrome）。指定したブラウザだけを起動する（未インストールなら終了）。
-# 空にすると Edge を優先し、無ければ Chrome を使う（どちらも無ければ終了）。
-# インストール先は自動検出する（標準インストールなら追加設定は不要）。
-browser =
-
-# Edge 実行ファイルのパス（空なら自動検出。非標準インストール時のみ指定）
-# 例: C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe
-edge_path =
-
-# Chrome 実行ファイルのパス（空なら自動検出。非標準インストール時のみ指定）
-# 例: C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe
-chrome_path =
-
-# 保存先フォルダ（png も txt もここ）
-output_dir = output
-
-# 変化検知後、描画が落ち着くまで待つ秒数。0 以上（負数はエラー）
-settle_delay = 0.8
-
-# ページ読み込み待ちの上限（ミリ秒）。正の整数（0 や負数はエラー）
-load_timeout = 5000
-
-# ページ側 JS（本文テキスト取得・撮影の合図）の実行を待つ上限（ミリ秒）。正の整数。
-# ページが重い処理で固まると本文取得が返らず、そのページの撮影が止まり続けるため、
-# ここで打ち切って次へ進む。取りこぼしが増えるなら大きく、固まりを早く諦めたいなら小さく。
-eval_timeout = 5000
-
-# 撮らないURL（カンマ区切り。空URLは常に自動スキップ）
-# 前方一致で判定するのでクエリ付き（?...）でも効く。* ? [ を含めると
-# ワイルドカード（fnmatch）扱い。例: about:blank, https://ads.example.com, *://*/logout
-skip_urls = about:blank
-
-# 撮るURLをこれだけに絞る（カンマ区切り。空なら無効）。指定すると、ここに
-# 合致しない URL はすべてスキップする（ホワイトリスト）。skip_urls も併用でき、
-# 合致しても skip_urls に当たるものは撮らない。判定は skip_urls と同じ前方一致/ワイルドカード。
-# 例: https://example.com/, https://*.example.com/*
-allow_urls =
-
-# 一部抜き出しの CSS セレクタ（空なら一部抜きはスキップ）
-# 例: h1  /  article  /  .price  /  #main .title
-target_selector =
-
-# 撮影中だけ隠す要素の CSS セレクタ（カンマ区切り。空なら何も隠さない）
-# 同意バナーや追従ヘッダなどが証跡（スクショ）に被るのを防ぐ。撮影の瞬間だけ
-# visibility:hidden で隠し、撮影後に元へ戻す（ページの操作や記録には影響しない）。
-# 例: #cookie-banner, .sticky-header
-hide_selectors =
-
-# 起動直後に記録を開始するか（false=待機状態で起動し、パネルの「記録開始」で撮り始める）
-# true にすると起動時から記録ON（従来どおり URL/タブ変化で自動保存）になる
-start_recording = false
-
-# 再利用するブラウザプロファイルの場所（空なら毎回まっさらな使い捨て＝従来どおり）。
-# パスを指定すると、そのフォルダにログイン状態などを保存して次回も引き継ぐ。
-# 相対パスは exe（またはこのスクリプト）と同じ場所を基準にする。
-# 例: profile_dir = profile
-# 注意: 指定フォルダには Cookie や認証情報がディスク保存される。取り扱いに注意。
-profile_dir =
-"""
 
 # browser 設定で受け付ける値 → 正規化後のキー（大文字小文字・別名を吸収）。
 # 空文字は「未指定（自動選択）」を表し、ここには含めない。
@@ -235,14 +173,31 @@ def summarize_config(config: Config) -> str:
     )
 
 
+def _default_config_text() -> str:
+    """同梱の既定 config.ini（default_config.ini）の中身を読んで返す。
+
+    **呼ばれたときに読む（遅延読み込み）。** モジュール読み込み時に定数へ展開しないこと。
+    import しただけで I/O が走ると、凍結（PyInstaller）環境などで失敗経路を 1 つ抱える
+    （badge.py が BADGE_SCRIPT のモジュール読み込み時生成をやめたのと同じ理由）。
+
+    読み込みは改行を \\n へ正規化する（universal newlines）。書き出す側の write_text が
+    プラットフォームの改行へ変換するので、Windows では CRLF で置かれる。
+    """
+    return package_data_path(DEFAULT_CONFIG_NAME).read_text(encoding="utf-8")
+
+
 def _write_default_config() -> bool:
     """既定の config.ini を CONFIG_PATH へ書き出す（自己修復）。
 
+    削除・破損しても notify_fatal→exit で起動不能にせず、これで作り直して既定値で起動する。
+
     書けたら True。読み取り専用の場所などで書けなくても例外は投げず False を返し、
-    呼び出し側がメモリ上の既定値で起動できるようにする（起動不能にしない）。
+    呼び出し側がメモリ上の既定値で起動できるようにする（起動不能にしない）。同梱の
+    default_config.ini 自体を読めない場合（配布物の欠落など）も同じ扱いにするため、
+    読み込みも try の中に入れてある。
     """
     try:
-        CONFIG_PATH.write_text(DEFAULT_CONFIG_TEXT, encoding="utf-8")
+        CONFIG_PATH.write_text(_default_config_text(), encoding="utf-8")
         return True
     except Exception as e:
         log(f"[config] 既定 config.ini の書き出しに失敗しました: {e}")
@@ -398,23 +353,42 @@ def _config_from_section(sec: configparser.SectionProxy, defaults: Config) -> Co
 
 
 def _config_with_defaults(defaults: Config) -> Config:
-    """既定 config.ini（DEFAULT_CONFIG_TEXT）の中身から Config を作る。
+    """同梱の既定 config.ini（default_config.ini）の中身から Config を作る。
 
     ファイルをどうしても書けない/読めないときでも、配布時と同じ既定値で起動するための
-    最後の砦。空セクションではなく DEFAULT_CONFIG_TEXT を使うので、skip_urls などの
+    最後の砦。空セクションではなく既定テンプレートを使うので、skip_urls などの
     「既定ファイルにある値」も取りこぼさない。output_dir 解決・set_log_dir も走る。
+
+    同梱テンプレートそのものが読めない（配布物からの欠落・凍結時の同梱漏れ）ときは、
+    空セクションへ落として Config の初期値だけで組み立てる。ここは最後の砦なので、
+    起動不能にしてはいけない（テンプレートの値と Config の初期値は一部違う。例えば
+    start_url は前者が https://www.google.com、後者が about:blank）。
     """
+    try:
+        text = _default_config_text()
+    except Exception as e:
+        log(f"[config] 同梱の既定設定（{DEFAULT_CONFIG_NAME}）を読めません: {e}")
+        text = "[capture]\n"
     parser = configparser.ConfigParser()
-    parser.read_string(DEFAULT_CONFIG_TEXT)
-    return _config_from_section(parser["capture"], defaults)
+    try:
+        parser.read_string(text)
+        sec = parser["capture"]
+    except (configparser.Error, KeyError) as e:
+        # 同梱テンプレート自体が壊れている。ここで諦めると起動不能になるので空で続ける。
+        log(f"[config] 同梱の既定設定（{DEFAULT_CONFIG_NAME}）が壊れています: {e}")
+        parser = configparser.ConfigParser()
+        parser.read_string("[capture]\n")
+        sec = parser["capture"]
+    return _config_from_section(sec, defaults)
 
 
 def _recover_broken_config(error: Exception, defaults: Config) -> Config:
     """破損／[capture] 欠落の config.ini から回復して起動する（自己修復）。
 
     壊れた元ファイルは消さず config.ini.invalid へ退避し（利用者が中身を確認できる）、
-    既定 config.ini を書き直して読み直す。書けない/読めない場合は DEFAULT_CONFIG_TEXT の
-    既定値で起動する。無言死ではなくダイアログで「壊れていた・作り直した」ことを伝える。
+    既定 config.ini を書き直して読み直す。書けない/読めない場合は同梱テンプレート
+    （default_config.ini）の既定値で起動する。無言死ではなくダイアログで
+    「壊れていた・作り直した」ことを伝える。
     """
     moved_to = None
     try:
