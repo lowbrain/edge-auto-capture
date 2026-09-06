@@ -70,7 +70,7 @@ Microsoft Edge（無ければ Google Chrome）で開いたページを、**記�
 
 - Windows
 - Microsoft Edge または Google Chrome がインストール済み（既定は Edge 優先→無ければ Chrome。`config.ini` の `browser` で片方に固定も可能。`channel="msedge"` / `"chrome"` でシステムのブラウザを使う）
-- 開発・ビルド時のみ Python 3.9+（配布した exe の実行に Python は不要）
+- 開発・ビルド時のみ Python 3.10+（配布した exe の実行に Python は不要）
 
 ## 既知の制限（非 HTML ページ）
 

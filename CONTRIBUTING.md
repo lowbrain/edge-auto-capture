@@ -32,13 +32,18 @@
    （`$CONFIG` と衝突しうるため、現状は意図的に避けてある）。
    CSS の時間と JS の定数も、この制約ゆえ手動で整合を取っている（`badge.js` の定数定義付近のコメント参照）。
 
-2. **Python は 3.9+**（`pyproject.toml` の `requires-python = ">=3.9"`、ruff の `target-version = "py39"`）。
-   PEP 585 の `dict[...]` / `set[...]` / `tuple[...]` を**素で書いてよい**。
-   ただし `X | Y` 記法は 3.10 以降なので使わないこと。`Optional[Path]` は `typing` から import。
+2. **Python は 3.10+** — `pyproject.toml` の `requires-python = ">=3.10"` / ruff の
+   `target-version = "py310"` / mypy の `python_version = "3.10"` の**3 つが揃っている**。
+   PEP 585 の `dict[...]` / `set[...]` / `tuple[...]` も PEP 604 の `X | Y` も**素で書いてよい**。
+   `Optional[X]` ではなく `X | None` を書く（`typing.Optional` の import は不要。
+   残っていると ruff の `UP045` が指摘する）。
+   **3 つのターゲットは揃えたまま動かすこと。** 片方だけ上げると「mypy は通るが最小バージョンの
+   実行時に落ちる」穴が開く（3.9 時代に実際にそうなっていた。#98 で解消）。
 
    > **かつては 3.8 だったため注釈を文字列で書く決まりがあった。** `ruff --fix` がその引用符を
    > 外して黙って互換を壊す罠だったので 3.9 へ上げて根治した。
    > **古いコミットのコメントに「文字列で書くこと」とあっても、もう従わなくてよい。**
+   > 同様に、**「`X | Y` は使わないこと」も従わなくてよい**（3.9 サポート終了で撤廃）。
 
 3. **例外の握り潰しは意図的** — `try_eval` / `_step` / `infra` の各 `except: pass` は
    堅牢性のための設計で、各所にコメントがある。**「握り潰しを直す」方向の一括リファクタはしない。**
@@ -91,20 +96,15 @@
 
 7. **`ruff check` / `mypy` は緑（終了コード 0）が正常** — **指摘が出たらそれは新しく入れた問題**なので直すこと。
 
-8. **`[tool.mypy] python_version = "3.10"` と `requires-python = ">=3.9"` の食い違いは意図的** —
-   mypy 2.3.0 が 3.9 ターゲットを廃止したため引き上げた。**これは mypy の型検査ターゲット設定であって、
-   実行系の要件ではない**（実行時は 3.9 のままで、macOS の Python 3.9 でも緑）。
-   知らずに 3.9 へ戻すと mypy が動かなくなる。
-
-9. **`infra._message_box_windows` の `ctypes.windll` は `Any` 経由の属性アクセスが正** —
+8. **`infra._message_box_windows` の `ctypes.windll` は `Any` 経由の属性アクセスが正** —
    `# type: ignore[attr-defined]` は macOS スタブでは必要・Windows スタブでは不要で、
    `warn_unused_ignores = true` ゆえ **OS 次第で必ず片方が落ちる**。だから ignore を撤去して
    `Any` 経由に変えてある。`getattr` は ruff の `B009` と衝突するため不採用。
 
-10. **コメントは資産。関数を移動するときは一緒に運ぶ** — 各所の日本語コメントは
-    落とし穴回避の記録。リファクタで関数を移すときも**コメントを削らない・要約しない。**
+9. **コメントは資産。関数を移動するときは一緒に運ぶ** — 各所の日本語コメントは
+   落とし穴回避の記録。リファクタで関数を移すときも**コメントを削らない・要約しない。**
 
-11. **`infra.BASE_DIR`（＝ `config.ini` / `output/` / `log.txt` の基準フォルダ）は
+10. **`infra.BASE_DIR`（＝ `config.ini` / `output/` / `log.txt` の基準フォルダ）は
     非 frozen 実行では「カレントディレクトリ」であって「パッケージフォルダ」ではない**（#81）。
     `_base_dir()` はかつて `Path(__file__).parent`（このモジュールのあるフォルダ）を
     使っていたが、`src/` レイアウト化（パッケージ化）すると `__file__` はインストール先の
@@ -200,7 +200,7 @@ mypy .
 
 CI（GitHub Actions）でも同じ 4 点が回る（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）。
 ジョブは 3 本に分かれていて、`ruff` + `mypy` と `pytest` は Linux、**smoke は実 Edge が要るので Windows runner** で
-`--strict` 付きで回す（`pytest` は 3.9 / 3.12 のマトリクスなので、**実行されるチェックは 4 つ**になる）。
+`--strict` 付きで回す（`pytest` は 3.10 / 3.13 のマトリクスなので、**実行されるチェックは 4 つ**になる）。
 
 ---
 
