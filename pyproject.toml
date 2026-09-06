@@ -5,7 +5,7 @@ name = "edge-auto-capture"
 dynamic = ["version"]
 description = "Edge の URL/タブ変化ごとにスクショと全文テキストを自動保存するツール"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 classifiers = [
     "License :: OSI Approved :: MIT License",
@@ -61,10 +61,8 @@ python_files = ["test_*.py"]
 # 型チェッカー（mypy）。注釈はほぼ完備で playwright は py.typed 同梱の
 # ため、既定（非 strict）でも実効性がある。回帰は CI で pytest/ruff と同列に止める想定。
 #   mypy .   ← 対象は下の files に一本化する（引数で列挙すると files を上書きしてしまう）
-# 新しい mypy（2.3+）は 3.9 ターゲットを廃止したため 3.10 で型検査する。
-# 実行時は requires-python=">=3.9" のまま（3.9 実機で動く）。3.10 検査だと `X | Y` など
-# 3.10 専用構文を mypy が見逃す点だけ注意（実際に使わない運用で担保。書いてよいのは
-# PEP 585 の dict[]/list[] までで X|Y は使わない — CONTRIBUTING.md §1-2 参照）。
+# 検査ターゲットは requires-python / ruff の target-version と揃える（#98）。3 つが揃って
+# いる限り「mypy は通るが最小バージョンの実行時に落ちる」穴は開かない。片方だけ上げないこと。
 python_version = "3.10"
 # src/ レイアウト（#81）。パッケージが src/ 配下にあるので、mypy がインストール
 # 解決に頼らずソースを直接見られるよう mypy_path を通す。
@@ -80,7 +78,7 @@ warn_redundant_casts = true
 
 [tool.ruff]
 # 対象は分割したモジュール群とテスト。生成物（build/dist/output）は除外。
-target-version = "py39"
+target-version = "py310"
 # 日本語コメント主体で、ruff は全角文字を表示幅2カラムで数える（E501 が当たりやすい）。
 # コードの実体より余裕を持たせ、コメント行が幅超過で頻繁に引っかからないよう 120 にする。
 line-length = 120
