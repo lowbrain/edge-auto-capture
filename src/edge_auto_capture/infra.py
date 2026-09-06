@@ -17,7 +17,7 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import IO, Any, Optional
 
 # バージョンの単一の出所。pyproject.toml は
 # [tool.setuptools.dynamic] version = {attr = "infra.__version__"} でここを参照する。
@@ -325,7 +325,7 @@ def acquire_single_instance_lock() -> bool:
     return True
 
 
-def _try_lock(handle) -> bool:
+def _try_lock(handle: IO[str]) -> bool:
     """開いたファイルに OS の排他ロックを非ブロッキングで掛ける。掛けられたら True。"""
     try:
         if sys.platform == "win32":
