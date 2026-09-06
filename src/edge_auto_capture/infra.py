@@ -33,18 +33,18 @@ def _base_dir() -> Path:
     これにより、配布した exe の隣に置いた config.ini を読み、
     output\\ も exe の隣に作れる（＝第三者が config.ini を編集できる）。
 
-    非 frozen 側は以前 `Path(__file__).parent`（このモジュールのあるフォルダ）を
-    使っていたが、パッケージ化（`src/` レイアウト）すると `__file__` はパッケージ
-    フォルダの中を指してしまい、`config.ini` の読み場所が変わってしまう。`pip install`
-    したコマンドはインストール先ではなく実行時のカレントディレクトリを基準に
-    `config.ini` / `output/` を解決すべきなので cwd にする（#81）。
+    非 frozen 側を `Path(__file__).parent`（このモジュールのあるフォルダ）にしては
+    いけない。`src/` レイアウトのパッケージなので `__file__` はインストール先の
+    パッケージフォルダを指し、`pip install` したコマンドを実行した場所とは無関係な
+    場所で `config.ini` を探し `output/` を作ることになる。`pip install` した
+    コマンドは実行時のカレントディレクトリを基準に解決するのが正しい。
     """
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
     return Path.cwd()
 
 
-# 設定・出力の基準フォルダ（通常実行なら本ファイル、exe 実行なら exe と同じ場所）。
+# 設定・出力の基準フォルダ（通常実行ならカレントディレクトリ、exe 実行なら exe と同じ場所）。
 BASE_DIR = _base_dir()
 
 # 実行ログの出力先。コンソール無し（windowed exe）で実行しても後から動作を追える
@@ -98,7 +98,7 @@ def set_log_dir(directory: Path) -> None:
 def ms3(now: datetime) -> str:
     """時刻のマイクロ秒 6 桁をミリ秒 3 桁（切り捨て・ゼロ詰め）へ落として返す（例: "123"）。
 
-    タイムスタンプのミリ秒部を作る唯一の場所（#56）。呼び出し側は用途ごとに書式が違う
+    タイムスタンプのミリ秒部を作る唯一の場所。呼び出し側は用途ごとに書式が違う
     （capture.now_stamp は人が時系列で読む `YYYY-MM-DD_HH-MM-SS-mmm`、lineage.group_stamp は
     `lineage-<id>` のトークン `YYYYMMDDHHMMSSmmm`）ので、共通なのは「6 桁を 3 桁へ落とす」
     この 1 点だけ。書式そのものは各呼び出し側が持つ（関数を統合してはいけない）。
