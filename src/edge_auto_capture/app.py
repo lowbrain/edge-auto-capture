@@ -94,6 +94,23 @@ def _url_key(url: str) -> str:
     return url.split("#", 1)[0]
 
 
+def _page_url(page) -> Optional[str]:
+    """ページの現在 URL を安全に読む。取れなければ None を返す。
+
+    Playwright の Page.url は、ページ／コンテキストが既に閉じられていると例外を投げる。
+    タブを閉じた直後のイベントや、終了処理と競合した経路では普通に起こりうるので、
+    握って「取れなかった」を返り値で伝える。
+
+    取れなかったときにどうするかは呼び出し側ごとに違う（撮らずに抜ける／ログの補足を
+    諦めて空文字で続ける）が、**例外を握って None にするところまでは共通**なので
+    ここへ寄せる。以前は同じ try/except が 3 箇所へ手書きされていた。
+    """
+    try:
+        return page.url
+    except Exception:
+        return None
+
+
 # セレクタ履歴の保持上限。datalist の候補が無限に伸びないよう頭打ちにする。
 # 新しい値を先頭に積み、上限を超えた古い値から落とす。
 SELECTOR_HISTORY_MAX = 20
@@ -283,9 +300,8 @@ class CaptureSession:
         撮影対象の抜き出しセレクタは、そのページが属するグループの selector を使う。
         trigger は撮影契機（"manual"/"url"/"spa"）で、CaptureRequest に載せて索引 CSV まで通す。
         """
-        try:
-            url = pg.url
-        except Exception:
+        url = _page_url(pg)
+        if url is None:
             return None
         if not should_capture(url, self.config):
             return None
@@ -303,10 +319,7 @@ class CaptureSession:
             return
         grp = await self._resolve_group(source["page"])
         grp.on = not grp.on
-        try:
-            where = source["page"].url
-        except Exception:
-            where = ""
+        where = _page_url(source["page"]) or ""
         log(f"[記録] {'開始' if grp.on else '停止'} {group_folder_name(grp.id)}"
             + (f"  {where}" if where else ""))
         await self.refresh_panels()
@@ -539,9 +552,8 @@ class CaptureSession:
         grp = await self._resolve_group(page)
         if not grp.on:
             return
-        try:
-            url = page.url
-        except Exception:
+        url = _page_url(page)
+        if url is None:
             return
         # 変化ゲート（seen 比較）は当所の責務。skip 判定と spawn は _shoot に委譲する。
         # 撮れなかった（撮影対象外）ときは seen を更新せず、次に撮れる URL まで撮り直しを待つ。
