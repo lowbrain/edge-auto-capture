@@ -9,6 +9,7 @@ test_packaging.py と同じ「漏れても 4 点セットのどれも落ちな�
 
 縛るもの:
 
+- 本文が名指しする `*.py` が実在すること（改名・移動の取り残しを落とす）
 - GitHub URL のスラグが 1 つであること（旧スラグのコピペ混入を落とす）
 - `[#N](.../issues/M)` の N と M が一致すること（「番号だけ」「URL だけ」直した半端な
   書き換えを落とす）
@@ -54,6 +55,22 @@ HISTORICAL_MENTIONS = {
     ("CONTRIBUTING.md", 38): "§4「ドキュメントに残タスクの一覧を作らない」の経緯の出典",
 }
 
+# 本文に出てよい「実在しない .py」→ 理由。
+# 退役した名前を歴史として語る場合だけ許可する。現在形で指してはいけない
+# （読み手が今あるファイルだと思い込む。実際 app.py の docstring が #81 の改名後も
+# 「python edge_auto_capture.py（開発時）」と動かない手順を指示し続けていた）。
+RETIRED_MODULE_MENTIONS = {
+    ("src/edge_auto_capture/browser.py", "edge_auto_capture.py"):
+        "「以前は edge_auto_capture.py 内のモジュール関数だった」という切り出しの経緯",
+    ("src/edge_auto_capture/downloads.py", "edge_auto_capture.py"):
+        "「以前は edge_auto_capture.py の CaptureSession が持っていた」という切り出しの経緯",
+    ("src/edge_auto_capture/lineage.py", "edge_auto_capture.py"):
+        "「以前は edge_auto_capture.py の CaptureSession が持っていた」という新設の経緯",
+    ("README.md", "edge_auto_capture.py"):
+        "「src/ レイアウト化で python edge_auto_capture.py は使えなくなった」の告知",
+}
+# このファイル自身は SELF として走査から外れるので、ここへ自分を足す必要はない。
+
 # 走査対象は git の追跡対象だけ。output/ や log.txt（成果物）、.venv、
 # .claude/worktrees/（作業用ワークツリー）は .gitignore 済みなので自動的に外れる。
 # ファイルシステムを直接歩くと、手元に残った古いワークツリーの中身で落ちる。
@@ -61,6 +78,11 @@ SUFFIXES = {".md", ".py", ".js", ".txt", ".toml", ".ini", ".yml", ".yaml", ".ps1
 
 # このファイル自身は定義の置き場所（上の定数とコメントに旧番号が出る）なので走査しない。
 SELF = Path(__file__).resolve()
+
+# 本文に「ファイル名として」現れる .py を拾う。パス付き（src/edge_auto_capture/app.py）も
+# 素の名前（badge.py）も対象。前後がパス文字・英数字のときは切り出さない
+# （`edge_auto_capture.app` のようなモジュール参照や URL の一部を誤検出しないため）。
+PY_FILE = re.compile(r"(?<![\w./-])(?P<name>[\w./-]*[\w-]\.py)\b")
 
 GITHUB_URL = re.compile(r"https://github\.com/(?P<slug>[\w.-]+/[\w.-]+)(?P<rest>[\w./#-]*)")
 ISSUE_URL = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/issues/(?P<num>\d+)")
@@ -154,4 +176,39 @@ def test_retired_roadmap_issues_are_not_referenced():
     assert leftovers == [], (
         f"退役したロードマップ Issue への参照が残っている: {leftovers}。"
         " 歴史的言及として残すなら HISTORICAL_MENTIONS へ理由付きで足す"
+    )
+
+
+def test_mentioned_python_files_exist():
+    """本文が名指しする `*.py` が実在すること（改名・移動の取り残しを落とす）。
+
+    上の Issue 参照と同じ型の不変条件で、**漏れても 4 点セットのどれも落ちない**。
+    実際に #81 の `src/` レイアウト化（改名）で取り残しが出ていた。`app.py` の docstring は
+    自分自身を `edge_auto_capture.py` と呼び続け、`起動方法` として
+    `python edge_auto_capture.py` という**動かないコマンドを指示していた**。README には
+    「それは使えなくなった」と書いてあるのに、である（CLAUDE.md 冒頭が名指しする #51 の
+    「解消済みの罠を踏み直せと指示する」状態の再発）。
+
+    パス付き（`src/edge_auto_capture/app.py`）は実パスとして、素の名前（`badge.py`）は
+    追跡対象のどれかの basename として照合する。退役した名前を歴史として語る場所だけは
+    RETIRED_MODULE_MENTIONS へ理由付きで置く。
+    """
+    tracked = {name for name in _tracked() if name.endswith(".py")}
+    basenames = {Path(name).name for name in tracked}
+
+    missing = []
+    for path in _files():
+        rel = _rel(path)
+        for m in PY_FILE.finditer(_read(path)):
+            name = m.group("name")
+            if (rel, name) in RETIRED_MODULE_MENTIONS:
+                continue
+            found = name in tracked if "/" in name else name in basenames
+            if not found:
+                missing.append(f"{rel}: {name}")
+
+    assert missing == [], (
+        f"実在しない .py を名指ししている: {sorted(set(missing))}。"
+        " 改名・移動したなら参照側も直す。退役した名前を歴史として語るなら"
+        " RETIRED_MODULE_MENTIONS へ理由付きで足す"
     )

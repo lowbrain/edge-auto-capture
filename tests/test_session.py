@@ -16,6 +16,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from conftest import RecRunner
 
 from edge_auto_capture import badge, capture, infra
 from edge_auto_capture.capture import CaptureRequest, CaptureRunner
@@ -50,20 +51,6 @@ class _FakeContext:
         self.pages = list(pages)
 
 
-class _RecRunner:
-    """runner.spawn(CaptureRequest) を記録するだけのスタブ。"""
-
-    def __init__(self) -> None:
-        self.calls: list[tuple] = []
-        self.group_ids: list[int] = []
-        self.triggers: list[str] = []
-
-    def spawn(self, req):
-        self.calls.append((req.page, req.url, req.selector))
-        self.group_ids.append(req.group_id)
-        self.triggers.append(req.trigger)
-
-
 def _make_session(pages, roots=None, config=None):
     """フェイク context を持つ CaptureSession を作る。
 
@@ -75,7 +62,7 @@ def _make_session(pages, roots=None, config=None):
     from edge_auto_capture.app import CaptureSession
 
     session = CaptureSession(_FakeContext(pages), config or Config())
-    session.runner = _RecRunner()
+    session.runner = RecRunner()
 
     async def _noop():
         return None

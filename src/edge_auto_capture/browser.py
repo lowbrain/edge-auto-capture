@@ -4,9 +4,9 @@
 - config から起動候補を優先順で決める（browser_candidates）
 - launch_persistent_context へ渡す起動オプションの組み立て（browser_launch_kwargs）
 
-以前は edge_auto_capture.py 内のモジュール関数だったが、起動処理の定義を 1 か所へ寄せて
+以前は当時の edge_auto_capture.py（現 app.py）内のモジュール関数だったが、起動処理の定義を 1 か所へ寄せて
 エントリを薄くするために切り出した。実際の起動ループ（候補を順に試す）は呼び出し側
-（edge_auto_capture の main）が持ち、ここは「何を・どう起動するか」の定義だけを担う。
+（app.py の main）が持ち、ここは「何を・どう起動するか」の定義だけを担う。
 """
 
 from .config import Config

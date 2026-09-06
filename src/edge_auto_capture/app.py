@@ -20,26 +20,25 @@ target_selector）。
 Edge の起動・監視・後始末はこのスクリプトが一括で行う（Playwright が毎回まっさらな一時
 プロファイルで Edge を起動し、終了時に自動で掃除する）。
 
-構成（役割ごとにモジュール分割）:
-  - edge_auto_capture.py … 本ファイル。エントリと監視セッション（CaptureSession）。
-  - badge.py / badge.js  … 各ページ上部の操作バー（ページ側 JS 一式）。
-  - capture.py           … 1ページ分の保存処理（撮影実行器 CaptureRunner）・ページ操作ヘルパ。
-  - config.py            … 設定（Config / config.ini の load_config）。
-  - infra.py             … 基盤ユーティリティ（パス・ログ・致命エラー通知・一時プロファイル掃除）。
-  - lineage.py           … タブ系譜（lineage）の識別・保存先規約と解決レジストリ。
-  - browser.py           … Edge/Chrome の起動候補と起動オプションの組み立て。
-  - downloads.py         … ダウンロードの退避（保存先規約・衝突回避・save_as 実行）。
+本ファイルの役割は、入口（cli / main）と監視セッション（CaptureSession）。
+**モジュール構成の一覧は README.md の「構成」が正で、ここへは書き写さない。**
+以前はここにも全モジュールの一覧を置いていたが、#81 の `src/` レイアウト化のときに
+README だけが追随し、この docstring は自分自身を旧いモジュール名で呼び続けたうえ、
+`起動方法` として動かないコマンドを指示し続けた（`ls` で分かる一覧を二重に持たない、
+という #78 の運用ルールの実例）。取り残しは tests/test_docs_refs.py が落とす。
 
 事前準備:
   pip install -e .          （または pip install playwright）
   ※ インストール済みの Edge をそのまま使うため、playwright install は不要。
 
 起動方法:
-  - python edge_auto_capture.py（開発時）、または
+  - python -m edge_auto_capture（開発時。`pip install -e .` 済みなら
+    `edge-auto-capture` コマンドでも同じものが起動する）、または
   - ビルドした edge-auto-capture.exe をダブルクリック（配布時）
-  設定は同じフォルダの config.ini で変更する（起動ページ start_url、保存先など。
-  start_url が空なら about:blank）。開いた Edge で普通に閲覧すれば、記録ONの間だけ
-  URL/タブの変化ごとに output\\ へ自動保存される。
+  設定は config.ini で変更する（起動ページ start_url、保存先など。start_url が空なら
+  about:blank）。config.ini と output\\ の置き場所は、通常実行なら**実行時のカレント
+  ディレクトリ**、exe 実行なら exe と同じフォルダ（infra._base_dir。#81）。
+  開いた Edge で普通に閲覧すれば、記録ONの間だけ URL/タブの変化ごとに自動保存される。
 
 停止は「Edge のウィンドウを閉じる」だけでよい（コンソール実行時は Ctrl + C も使える）。
 停止時に、起動した Edge の終了と一時プロファイルの削除まで行う。動作ログは保存先

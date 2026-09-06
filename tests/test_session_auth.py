@@ -10,6 +10,7 @@
 import asyncio
 
 import pytest
+from conftest import RecRunner
 
 from edge_auto_capture.app import CaptureSession, GroupState, _url_key
 from edge_auto_capture.config import Config
@@ -29,14 +30,6 @@ class _Page:
         return None
 
 
-class _RecRunner:
-    def __init__(self) -> None:
-        self.calls: list[tuple] = []
-
-    def spawn(self, page, url, config, selector="", group_id=""):
-        self.calls.append((page, url, selector))
-
-
 def _seeded_session(**state) -> tuple[CaptureSession, _Page]:
     """1 ページを root として seed 済みのセッションと、その root ページを返す。
 
@@ -45,7 +38,7 @@ def _seeded_session(**state) -> tuple[CaptureSession, _Page]:
     session.page_root は読み取り専用ビューなので外から書けない）。
     """
     s = _session()
-    s.runner = _RecRunner()
+    s.runner = RecRunner()
     page = _Page()
     s._lineage.seed_root(
         page,
