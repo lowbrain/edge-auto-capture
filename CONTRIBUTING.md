@@ -6,28 +6,19 @@
 - ツールの仕組み・設定リファレンス・ビルド・配布は [`README.md`](README.md)。
 - 過去の完了作業の実装内容は git 履歴を参照。
 
-## 課題タグ（`A-` / `B-` / `D-` / `E-` / `F-` / `R`）の凡例
+## 課題タグ（`A-` / `B-` / `D-` / `E-` / `F-` / `R`）— 退役語彙
 
-コード中のコメントに散在する `A-3` / `B-1` / `D-C1` / `E-6` / `F-D3` / `R5b` のような ID は、
-**退役済みの旧文書由来の安定した識別子**。会話や履歴での参照用で、「どのファイルか」の意味はもう持たない。
-接頭辞ごとの由来と意味は次のとおり。
+`A-3` / `B-1` / `D-C1` / `E-6` / `F-D3` / `R5b` のような ID は**退役済み。新たに使わない。**
+作業ツリー（コード・ドキュメント・スキル）からは外してあるが、git のコミットメッセージと
+過去の Issue・PR のタイトルには残っているため、**それらを読むときにだけ要る。**
 
-| 接頭辞 | 由来（退役済みの旧文書） | 意味 | 例 |
-|---|---|---|---|
-| `A-` | `IMPROVEMENTS.md` §A「バグ／実害があるもの」 | 実害の出る不具合の対策 | `A-1` シャッターフラッシュの写り込み |
-| `B-` | `IMPROVEMENTS.md` §B「設計上の改善」 | 設計・挙動の改善 | `B-3` 撮影キューの合流（無制限化の防止） |
-| `E-` | `IMPROVEMENTS.md` §E「ページへの影響・未定義動作」 | 見に行ったページへの副作用・未定義動作の抑止 | `E-3` サイト側からの存在検知の防止 |
-| `D-` | `DISTRIBUTION.md`（§A 法務 / §B サポート性 / §C 第三者環境で壊れる箇所 / §D 導入障壁 / §E 配布物） | 第三者へ配って動かすための対策 | `D-C1` 書き込み不可時の退避 |
-| `F-` | `FEATURES.md`（§A 保存物の価値 / §B 撮影品質 / §C 運用の実用性 / §D 操作性） | 機能追加 | `F-A1` 索引 CSV |
-| `R` | `REFACTORING.md` §2「基盤リファクタの中身」 | 振る舞いを変えない内部整理 | `R5b` 副作用の分離 |
+由来は `A-` / `B-` / `E-` が `IMPROVEMENTS.md`、`D-` が `DISTRIBUTION.md`、
+`F-` が `FEATURES.md`、`R` が `REFACTORING.md`（いずれも退役済みの旧文書）。本文は git 履歴に
+丸ごと残っていて、`git log --all --diff-filter=D --name-only --oneline -- 'docs/*'` で
+退役コミットを辿り、その親から `git show <コミット>^:docs/IMPROVEMENTS.md` のように読める。
 
-- **ID の形**: `D-` / `F-` は「節の英字＋連番」が続く（`D-C1` / `F-A1`）。
-  `A-` / `B-` / `E-` / `R` は連番のみで、細分は末尾に英字を足す（`A-1` / `R3b` / `R5a`）。
-- **個々のタグが何を指し、いま済んでいるかは Issue [#78](https://github.com/lowbrain/edge-auto-capture/issues/78) が正。**
-  ここに全タグの一覧は作らない（二重管理になる。§4 末尾の方針）。この表は接頭辞の凡例だけを持つ。
-- 旧文書の本文は git 履歴に残っている。退役コミットは
-  `git log --all --diff-filter=D --name-only --oneline -- 'docs/*'` で辿れ、
-  そのコミットの親から `git show <コミット>^:docs/IMPROVEMENTS.md` のように読める。
+**個々のタグの語釈一覧はここに作らない**（二重管理になる。§4 末尾の方針）。この節は
+「どこを `git show` すれば読めるか」だけを持つ索引で、語釈そのものは持たない。
 
 ---
 
@@ -75,13 +66,13 @@
    片方だけ変えると **無言失敗する**（気づけない）。
    `badge.js` 側でバインディングを追加するときは `BINDING_NAMES` にも足すこと。
 
-6. **`badge.js` のシャドウは `closed`・呼び出しは `callBinding` 経由**（`A-4` 対応済み）。
+6. **`badge.js` のシャドウは `closed`・呼び出しは `callBinding` 経由**。
    - `host.shadowRoot` は `null` を返す。中を触るテストは
      `window.__eac_debugRoot()`（token 無しビルドでのみ公開）を使う
    - `window.__eac_toggle(...)` のような**直接呼び出しを新たに書かないこと**。
      必ず `callBinding('__eac_toggle', TOK, ...)` を使う（サイト側が差し替えた関数へ token を渡さないため）
    - `mode: 'open'` に戻すとスモークテストが失敗する（回帰チェックを入れてある）
-   - **固定名を `window` に生やさない**（`E-3` 対応済み・存在検知の防止）:
+   - **固定名を `window` に生やさない**（サイト側からの存在検知の防止）:
      - Python→ページのヘルパは固定名（`window.__eacApplyState` 等）ではなく、起動ごとの
        ランダム名 `ns`（`badge.new_namespace()`）の**非列挙**プロパティ `window[ns]` に
        まとめて公開する。呼び出し式は `badge.*_call(ns, ...)`（`body_text_call` / `sig_call` /
@@ -94,7 +85,7 @@
        参照を `BOUND` へ退避したうえで `delete window[name]` して消す。この退避＋削除は
        **最上位フレームの早期 `return` より前**で全フレーム分行う（iframe にも生えるため）。
        token 無し（スモーク）ビルドは削除せず `callBinding` の実行時フォールバックに任せる。
-     - `window.__eacApplyState` 等の**固定名代入を復活させない**こと（`E-3` が無効化する）。
+     - `window.__eacApplyState` 等の**固定名代入を復活させない**こと（存在検知の防止が無効になる）。
        スモークテストの手順 13 が `'__eacApplyState' in window` / `'__eac_toggle' in window` を
        回帰チェックしている。
 
@@ -111,8 +102,7 @@
    `Any` 経由に変えてある。`getattr` は ruff の `B009` と衝突するため不採用。
 
 10. **コメントは資産。関数を移動するときは一緒に運ぶ** — 各所の日本語コメントは
-    `A-1` / `A-2` / `B-3` / `E-6` 等の落とし穴回避の記録。リファクタで関数を移すときも
-    コメントを削らない・要約しない。**接頭辞の意味は冒頭の「課題タグの凡例」を参照。**
+    落とし穴回避の記録。リファクタで関数を移すときも**コメントを削らない・要約しない。**
 
 11. **`infra.BASE_DIR`（＝ `config.ini` / `output/` / `log.txt` の基準フォルダ）は
     非 frozen 実行では「カレントディレクトリ」であって「パッケージフォルダ」ではない**（#81）。
@@ -137,10 +127,10 @@
 | `tests/smoke_badge.py` | 実 Edge/Chrome が要る。**Edge → Chrome の順にフォールバックするので、Edge の無い macOS でも Chrome があれば実際に走って通る**（同じ Chromium 系でバー JS の検証としては等価）。どちらも無ければ `SKIP`（終了コード 0）で抜けるので **PASS 表示を鵜呑みにしない**（`--strict` で FAIL 化） |
 | `infra._message_box` | Windows は `ctypes.windll`、macOS は `osascript`（開発機での確認用に分岐追加済み） |
 | `build.ps1` | PowerShell / Windows 専用。macOS では実行検証できない |
-| `%LOCALAPPDATA%` | `D-C1` の退避先。macOS には存在せず `tempfile.gettempdir()` へフォールバック |
+| `%LOCALAPPDATA%` | 書き込み不可時の退避先。macOS には存在せず `tempfile.gettempdir()` へフォールバック |
 
 **両 OS でカバレッジが相補的**な点に注意。Windows では `test_resolve_writable_dir_*` 2 件
-（`D-C1` の退避ロジック）が POSIX chmod の効かなさゆえ self-skip され、macOS では実行されて通る。
+（書き込み不可時の退避ロジック）が POSIX chmod の効かなさゆえ self-skip され、macOS では実行されて通る。
 片方の OS だけで「全部通った」と判断しないこと。
 
 ---
@@ -152,7 +142,7 @@
 ```bash
 pip install -e ".[dev]"
 pytest                                 # 速い純粋関数・token 照合・DL の回帰
-python tests/smoke_badge.py --strict   # 実 Edge/Chrome。バー構築・SPA検知・写り込み防止・検知不能化(E-3)・JS エラー無し
+python tests/smoke_badge.py --strict   # 実 Edge/Chrome。バー構築・SPA検知・写り込み防止・固定名の検知不能化・JS エラー無し
 ruff check .
 mypy .
 ```
@@ -162,7 +152,7 @@ mypy .
   **PASS 表示を鵜呑みにしない**。CI・検証では **`--strict`** を付けて FAIL 化する（付けないと
   ブラウザ不在環境で「何も検証せず緑」になる）。SKIP されたら報告では「未検証」と明記する。
 - **smoke が緑でも Windows 実機検証の代わりにはならない。** smoke が見るのは操作バーの JS で、
-  `build.ps1` / `infra._message_box_windows` の `ctypes.windll` / `%LOCALAPPDATA%` 退避（`D-C1`）/
+  `build.ps1` / `infra._message_box_windows` の `ctypes.windll` / `%LOCALAPPDATA%` 退避 /
   実 Edge 固有の挙動は対象外。実機検証の現在地は Issue
   [#78](https://github.com/lowbrain/edge-auto-capture/issues/78) の「検証状況」が正。
 - **新モジュールを足すときは `src/edge_auto_capture/` へ置くだけでよい**（`packages.find` が自動検出する。#81）。
@@ -180,7 +170,8 @@ CI（GitHub Actions）でも同じ 4 点が回る（[`.github/workflows/ci.yml`]
 
 - **1 件ずつ 1 コミット**。まとめない。
 - コミットメッセージは既存の慣習（日本語・`種別: 内容` 形式）に合わせる。
-  例: `修正: ダウンロードの保存先を output 配下へ明示する（E-4）`
+  例: `修正: ダウンロードの保存先を output 配下へ明示する（#59）`
+  末尾の括弧には対象の Issue 番号を書く（課題タグは退役済み。冒頭の「退役語彙」）。
 - **push / タグ付けは利用者に確認**してから。
 - ドキュメント（`README.md` / `CONTRIBUTING.md` / `USAGE.txt`）を直したら、その旨を報告に含める。
 - **未検証の項目は必ず「未検証」と明記する。** 憶測で「動作を確認しました」と書かない。
