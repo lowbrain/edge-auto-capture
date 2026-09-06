@@ -230,6 +230,11 @@ class CaptureRunner:
         委ねる。「保存物 1 種＝メソッド 1 本」の粒度に分けてあるのは、ここへ保存物を
         足すため。索引 CSV は実際にこの粒度で足した（#13。同じクラスの
         _append_index）。保存順・ファイル名・ログ文言は不変。
+
+        各 _save_* へは req をそのまま渡し、page / url / config / selector はあちら側が
+        req から取る（#55 と同じ理由。引数へ並べると隣接する同型（str）の stem と url を
+        取り違えても型検査で止まらず、保存物を 1 種足すたびに同じ行列がもう 1 本増える）。
+        追加で渡すのは、この撮影中に確定して req には載らない save_dir / stem / done だけ。
         """
         # req.selector は「一部抜き出し(_part.txt)」の対象 CSS セレクタ。操作バーの入力欄で
         # 実行時に変えられるため、config 固定値ではなく呼び出し時の値を使う
@@ -281,12 +286,12 @@ class CaptureRunner:
         await try_eval(page, badge.capture_start_call(self.ns), eval_timeout)
         try:
             # 1) フルページ スクリーンショット
-            await self._save_screenshot(page, save_dir, stem, url, done)
+            await self._save_screenshot(req, save_dir, stem, done)
             # 2) ページ全文テキスト
-            await self._save_text(page, save_dir, stem, url, req.config, done)
+            await self._save_text(req, save_dir, stem, done)
             # 3) 一部抜き出し（セレクタ設定時のみ）
             if req.selector:
-                await self._save_part(page, save_dir, stem, url, req.selector, done)
+                await self._save_part(req, save_dir, stem, done)
         finally:
             await try_eval(page, badge.capture_end_call(self.ns, bool(done)), eval_timeout)
 
@@ -350,7 +355,7 @@ class CaptureRunner:
             log(f"[skip index] {req.url}  ({e})")
 
     async def _save_screenshot(
-        self, page: Page, save_dir: Path, stem: str, url: str, done: list[str]
+        self, req: CaptureRequest, save_dir: Path, stem: str, done: list[str]
     ) -> None:
         """フルページ スクリーンショット（png）を保存する。
 
@@ -359,13 +364,13 @@ class CaptureRunner:
         ここでは退避済み前提でスクショだけ撮る。同一ページの撮影は worker が1件ずつ直列化するので
         （_worker 参照）、退避中に別撮影が割り込んで操作バーが写り込むことはない。
         """
-        with _step("png", url, done):
-            await page.screenshot(
+        with _step("png", req.url, done):
+            await req.page.screenshot(
                 path=str(save_dir / f"{stem}.png"), full_page=True
             )
 
     async def _save_text(
-        self, page: Page, save_dir: Path, stem: str, url: str, config: Config, done: list[str]
+        self, req: CaptureRequest, save_dir: Path, stem: str, done: list[str]
     ) -> None:
         """ページ全文テキスト（txt）を保存する（操作バーは除外して取得）。
 
@@ -373,26 +378,31 @@ class CaptureRunner:
         asyncio.wait_for で打ち切る。戻らないと _step の外＝worker が止まる。
         打ち切りの TimeoutError は _step が握って [skip txt] を出し、worker は次へ進む。
         """
-        with _step("txt", url, done):
+        with _step("txt", req.url, done):
             text = await asyncio.wait_for(
-                page.evaluate(badge.body_text_call(self.ns)), timeout=config.eval_timeout_sec
+                req.page.evaluate(badge.body_text_call(self.ns)),
+                timeout=req.config.eval_timeout_sec,
             )
             (save_dir / f"{stem}.txt").write_text(
-                f"URL: {url}\n\n{text}", encoding="utf-8"
+                f"URL: {req.url}\n\n{text}", encoding="utf-8"
             )
 
     async def _save_part(
-        self, page: Page, save_dir: Path, stem: str, url: str, selector: str, done: list[str]
+        self, req: CaptureRequest, save_dir: Path, stem: str, done: list[str]
     ) -> None:
-        """セレクタで指定した一部だけを抜き出したテキスト（_part.txt）を保存する。"""
-        with _step("part", url, done):
+        """セレクタで指定した一部だけを抜き出したテキスト（_part.txt）を保存する。
+
+        対象セレクタは req.selector（操作バーの入力欄で実行時に変わる値。config 固定値では
+        ない）。空のときは呼び出し元がこのメソッド自体を呼ばない。
+        """
+        with _step("part", req.url, done):
             # 操作バーはシャドウ内にあり locator（querySelector 相当）は境界を越えない。
             # 広いセレクタ（div / body / * など）でもバーの文言は拾わないので隠す必要はない。
-            parts = await page.locator(selector).all_inner_texts()
+            parts = await req.page.locator(req.selector).all_inner_texts()
             # 空文字（該当なし要素）は落とす。
             parts = [p for p in parts if p.strip()]
             body = "\n---\n".join(parts) if parts else "(該当箇所が見つかりませんでした)"
             (save_dir / f"{stem}_part.txt").write_text(
-                f"URL: {url}\nSELECTOR: {selector}\n\n{body}",
+                f"URL: {req.url}\nSELECTOR: {req.selector}\n\n{body}",
                 encoding="utf-8",
             )
