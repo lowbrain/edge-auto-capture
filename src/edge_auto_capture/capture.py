@@ -7,7 +7,7 @@
 撮影の実行時状態（実行中タスク・ページ単位ワーカー・保留要求）は、以前モジュール
 グローバルだったが、CaptureRunner のインスタンスが own する（1 監視セッションに 1 個。
 状態の所在を明確にする）。同一ページの撮影はワーカーで直列化し、進行中に来た要求は
-「保留1件・最新で置き換え」に合流させる（B-3: キュー無制限の防止）。
+「保留1件・最新で置き換え」に合流させる（キュー無制限の防止）。
 ページ側 JS の呼び出し式・文言は badge モジュールに集約してあり、ここから参照する。
 """
 
@@ -29,7 +29,7 @@ from .config import Config
 from .infra import iso_timestamp, log, ms3
 from .lineage import group_folder_name, group_subdir
 
-# 索引 CSV のファイル名と見出し。撮影ごとに 1 行追記して「いつ・何を撮ったか」を一覧にする（F-A1）。
+# 索引 CSV のファイル名と見出し。撮影ごとに 1 行追記して「いつ・何を撮ったか」を一覧にする。
 INDEX_CSV_NAME = "index.csv"
 INDEX_CSV_HEADER = ["時刻", "URL", "タイトル", "ファイル名接頭辞", "撮影契機", "セレクタ", "成否"]
 
@@ -60,7 +60,7 @@ def now_stamp() -> str:
 async def try_eval(page: Page, js: str, timeout: Optional[float] = None) -> None:
     """ページ側 JS を実行。失敗しても無視する（操作バーの表示/非表示など副次処理用）。
 
-    timeout（秒）を渡すと、その時間内に返らなければ諦める（E-6: ページのメインスレッドが
+    timeout（秒）を渡すと、その時間内に返らなければ諦める（ページのメインスレッドが
     詰まって evaluate が戻らないと worker が永久に止まるのを防ぐ）。打ち切りは TimeoutError
     になるが、この関数は元々あらゆる例外を握って無視するので呼び出し側は続行できる。
     """
@@ -103,7 +103,7 @@ def _step(tag: str, url: str, done=None):
     例外が出ても [skip <tag>] を表示して握り、他ステップの続行を妨げない。
     （png / txt / part の 3 ステップで同じ try/except を書かないための共通化）
 
-    done を渡すと、例外なく完了したときだけ tag を追記する（A-3）。呼び出し側は
+    done を渡すと、例外なく完了したときだけ tag を追記する。呼び出し側は
     done に積まれた tag で「実際に何を保存できたか」を判定し、全滅時に誤って
     [saved] と記録しないようにする。保存物ではない load / title には渡さない。
     """
@@ -121,14 +121,14 @@ class CaptureRequest:
 
     以前は `(url, config, selector, group_id)` の位置引数タプルが 4 経路を貫通していた
     （順序に依存し、要素を 1 個足すたびに 4 箇所の分解を直す必要があった）。1 オブジェクトへ
-    集約したことで、以後の機能（F-A1 索引 CSV の「撮影契機」など）は「フィールドを 1 個
+    集約したことで、以後の機能（索引 CSV の「撮影契機」など）は「フィールドを 1 個
     足す」だけで全経路へ伝わる。trigger はその最初の実例（フェーズ 2）。
 
     page は撮影対象ページ。_pending / _workers のキーでもあるが、要求そのものにも保持して
     「1 要求＝1 オブジェクト」で完結させる。selector は _part.txt 抜き出しの対象（実行時の
     バー入力値）。group_id は保存先サブフォルダ（lineage-<id>）と保存ログの系譜表記に使う。
     trigger は撮影契機（"manual"=今すぐ1枚 / "url"=URL変化・記録開始時 / "spa"=SPA変化）で、
-    投入元 3 経路から _capture の索引 CSV まで貫通させる（F-A1）。既定は空（未指定）。
+    投入元 3 経路から _capture の索引 CSV まで貫通させる。既定は空（未指定）。
     """
 
     page: Page
@@ -147,19 +147,19 @@ class CaptureRunner:
     複数セッション時の共有事故を避ける）。
 
     撮影は **ページごとに1つのワーカー**で直列化し、進行中に来た新しい要求は
-    「保留1件・最新で置き換え」に合流させる（B-3: キュー無制限の防止）。
+    「保留1件・最新で置き換え」に合流させる（キュー無制限の防止）。
     更新の激しいダッシュボードで SPA 検知 ON にしても、あるページのキューは
     「実行中1件＋保留1件」で構造的に頭打ちになり、フルページ PNG がディスクを
     食い潰さない。中間フレームは捨てるが、要求後の状態は必ず撮れるので撮り逃さない。
     """
 
     def __init__(self) -> None:
-        # 撮影 1 回が終わるたびに成否（done 有無）を通知するコールバック（F-D3）。
+        # 撮影 1 回が終わるたびに成否（done 有無）を通知するコールバック。
         # 監視セッション（CaptureSession）が撮影カウンタの本体を持つため、ここで結果だけを渡す。
         # 既定は None（撮影実行器を単体で使うテストや、通知が要らない場面では何もしない）。
         self.on_result: Optional[Callable[[bool], Awaitable[None]]] = None
 
-        # Python→ページのヘルパ（captureStart/captureEnd/bodyText）を収める window プロパティ名（E-3）。
+        # Python→ページのヘルパ（captureStart/captureEnd/bodyText）を収める window プロパティ名。
         # 監視セッション（CaptureSession）が起動ごとのランダム名を生成し、ここへ配る。空（既定）は
         # 未公開＝呼び出しは no-op（撮影実行器を単体で使うテストや、ヘルパを呼ばない場面向け）。
         self.ns: str = ""
@@ -184,7 +184,7 @@ class CaptureRunner:
         )
 
     def spawn(self, req: CaptureRequest) -> None:
-        """撮影要求（CaptureRequest）を投入する（ページごとに合流。B-3）。
+        """撮影要求（CaptureRequest）を投入する（ページごとに合流）。
 
         最新要求で _pending を上書きし、そのページの worker が居なければ起動する。
         撮影の合図（バー退避→撮影→シャッターフラッシュ＋復帰）は _capture() が保存処理全体を
@@ -228,7 +228,7 @@ class CaptureRunner:
 
         個々の保存（png / txt / part）は _save_screenshot / _save_text / _save_part に
         委ねる。「保存物 1 種＝メソッド 1 本」の粒度に分けてあるのは、ここへ保存物を
-        足すため。F-A1（索引 CSV）は実際にこの粒度で足した（#13。同じクラスの
+        足すため。索引 CSV は実際にこの粒度で足した（#13。同じクラスの
         _append_index）。保存順・ファイル名・ログ文言は不変。
         """
         # req.selector は「一部抜き出し(_part.txt)」の対象 CSS セレクタ。操作バーの入力欄で
@@ -243,7 +243,7 @@ class CaptureRunner:
         url = req.url
         ts = now_stamp()                                     # 例: 2026-08-11_14-30-25-123
         # 索引 CSV 用の撮影時刻。ファイル名（ts）とは別に、オフセット付き ISO で撮影開始時刻を
-        # 押さえる（F-A4）。後から遡って直せない情報なので、await より前のこの時点で確定させる。
+        # 押さえる。後から遡って直せない情報なので、await より前のこの時点で確定させる。
         captured_at = iso_timestamp()                        # 例: 2026-08-11T14:30:25.123+09:00
 
         # 読み込み完了を待つ（タイムアウトしても続行）
@@ -251,7 +251,7 @@ class CaptureRunner:
             await page.wait_for_load_state("load", timeout=req.config.load_timeout)
         # 描画が落ち着くまで待つ（settle_delay）。ただし SPA 経由は、ページ側 badge.js が
         # SPA_SETTLE_MS のデバウンスで既に「変化が止まってから」通知している。ここで再び
-        # settle_delay を待つと二重待ちになり体感が遅れるだけなので省く（B-4, #18）。
+        # settle_delay を待つと二重待ちになり体感が遅れるだけなので省く（#18）。
         # URL遷移/手動は load 直後にまだ描画が動きうるので従来どおり待つ。
         if req.trigger != "spa":
             await asyncio.sleep(req.config.settle_delay)
@@ -267,7 +267,7 @@ class CaptureRunner:
         save_dir = group_subdir(req.config.output_dir, req.group_id)
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        # 実際に保存できたステップの記録（A-3）。png / txt / part だけを積み、
+        # 実際に保存できたステップの記録。png / txt / part だけを積み、
         # 全滅時に [saved] と嘘のログを残さないための判定材料にする。
         # done は各 _save_* へ渡し、成功したステップだけが自分の tag を積む。
         done: list[str] = []
@@ -277,7 +277,7 @@ class CaptureRunner:
         # 退避は png のためだが、txt/txt(part) は本文取得側でバーを除外するので退避したままでも
         # 支障はなく、フラッシュ色を _capture 全体の成否に一致させるため復帰は最後にまとめて行う。
         # captureEnd は失敗時も戻すため finally で必ず呼ぶ（フラッシュ色は done 有無で決める）。
-        eval_timeout = req.config.eval_timeout_sec               # ミリ秒 → 秒の換算は Config 側（E-6）
+        eval_timeout = req.config.eval_timeout_sec               # ミリ秒 → 秒の換算は Config 側
         await try_eval(page, badge.capture_start_call(self.ns), eval_timeout)
         try:
             # 1) フルページ スクリーンショット
@@ -298,10 +298,10 @@ class CaptureRunner:
         else:
             log(f"[保存できず] {who}{stem}  <- {url}")
 
-        # 撮影ごとに索引 CSV へ 1 行追記（F-A1）。成否は done（実際に保存できたステップ）で決める。
+        # 撮影ごとに索引 CSV へ 1 行追記。成否は done（実際に保存できたステップ）で決める。
         self._append_index(req, captured_at, title, stem, done)
 
-        # 撮影 1 回分の成否を監視セッションへ通知する（F-D3。撮影カウンタ／失敗の把握に使う）。
+        # 撮影 1 回分の成否を監視セッションへ通知する（撮影カウンタ／失敗の把握に使う）。
         # 通知先が未設定（単体テスト等）や通知自体が失敗しても、撮影本体は成立しているので握る。
         if self.on_result is not None:
             try:
@@ -317,7 +317,7 @@ class CaptureRunner:
         stem: str,
         done: list[str],
     ) -> None:
-        """撮影 1 回分を索引 CSV（output_dir/index.csv）へ 1 行追記する（F-A1）。
+        """撮影 1 回分を索引 CSV（output_dir/index.csv）へ 1 行追記する。
 
         系譜ごとのサブフォルダではなく output_dir 直下に置き、全系譜の撮影を 1 本の索引にまとめる
         （log.txt と同じ粒度）。列は時刻/URL/タイトル/ファイル名接頭辞/撮影契機/セレクタ/成否。
@@ -370,7 +370,7 @@ class CaptureRunner:
         """ページ全文テキスト（txt）を保存する（操作バーは除外して取得）。
 
         evaluate はタイムアウト引数を持たず set_default_timeout も効かないため、
-        asyncio.wait_for で打ち切る（E-6）。戻らないと _step の外＝worker が止まる。
+        asyncio.wait_for で打ち切る。戻らないと _step の外＝worker が止まる。
         打ち切りの TimeoutError は _step が握って [skip txt] を出し、worker は次へ進む。
         """
         with _step("txt", url, done):
