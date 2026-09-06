@@ -18,8 +18,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-import lineage
-from lineage import (
+from edge_auto_capture import lineage
+from edge_auto_capture.lineage import (
     GroupState,
     LineageRegistry,
     group_folder_name,

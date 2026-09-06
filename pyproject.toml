@@ -19,10 +19,12 @@ dependencies = [
 ]
 
 [project.scripts]
-# pip install したときのコマンド。中身は edge_auto_capture.cli()（#50 で __main__ から
+# pip install したときのコマンド。中身は edge_auto_capture.app.cli()（#50 で __main__ から
 # 切り出した入口。終了コードを返すので、生成されるラッパがそのまま sys.exit へ渡せる）。
-# 配布 exe は build.ps1 が PyInstaller で作るので、こちらは開発・pip 導入時の導線。
-edge-auto-capture = "edge_auto_capture:cli"
+# app を直接指すのは、__init__.py に重い import（Playwright に依存する app）を
+# 置かないため（#81）。配布 exe は build.ps1 が PyInstaller で作るので、こちらは
+# 開発・pip 導入時の導線。
+edge-auto-capture = "edge_auto_capture.app:cli"
 
 [project.optional-dependencies]
 # 配布用 exe をビルドする人向け（配布物の実行には不要）。
@@ -35,14 +37,19 @@ dev = ["pytest", "ruff", "mypy"]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-# 役割ごとに分割したトップレベル・モジュール群（パッケージフォルダは作らない）。
-# ページ側 JS 本体は badge.js（データファイル）で、配布 exe には build.ps1 が同梱する。
-py-modules = ["edge_auto_capture", "badge", "browser", "capture", "config", "downloads", "infra", "lineage"]
+[tool.setuptools.packages.find]
+# src/ レイアウト（#81）。py-modules（トップレベル・モジュール群）では package-data
+# が使えず badge.js を wheel に含められなかったため、パッケージ化して根治した。
+where = ["src"]
+
+[tool.setuptools.package-data]
+# ページ側 JS 本体（badge.py が実行時に読む実ファイル）。py-modules 時代は
+# pip install（非 editable）で wheel に入らず起動不能になっていた（#81）。
+edge_auto_capture = ["badge.js"]
 
 [tool.setuptools.dynamic]
 # バージョンは infra.__version__ を出所にする（project.dynamic と対）。
-version = { attr = "infra.__version__" }
+version = { attr = "edge_auto_capture.infra.__version__" }
 
 [tool.pytest.ini_options]
 # テストは tests/ 配下。実 Edge を要するスモーク（smoke_*）は既定の収集から外し、
@@ -59,6 +66,9 @@ python_files = ["test_*.py"]
 # 3.10 専用構文を mypy が見逃す点だけ注意（実際に使わない運用で担保。書いてよいのは
 # PEP 585 の dict[]/list[] までで X|Y は使わない — CONTRIBUTING.md §1-2 参照）。
 python_version = "3.10"
+# src/ レイアウト（#81）。パッケージが src/ 配下にあるので、mypy がインストール
+# 解決に頼らずソースを直接見られるよう mypy_path を通す。
+mypy_path = ["src"]
 # 生成物やテスト（smoke は実 Edge 前提でスタブ化が重い）は対象外。まずは配布コード本体を守る。
 # 対象はモジュールを列挙せずディレクトリで指定する。列挙にすると新モジュールを足したとき
 # 検査対象への追加を忘れて黙って素通りする（#40 で実際に起きた）。exclude 側だけ保守すればよい。
@@ -82,3 +92,8 @@ select = ["E", "F", "I", "UP", "B"]
 # 意図的に例外を握り潰す箇所が多い（堅牢性のための設計）ため、B の一部は許容する。
 # E501（行長）は line-length に従う。necessary な握り潰しは各所コメントで説明済み。
 ignore = ["B008"]
+
+[tool.ruff.lint.isort]
+# src/ レイアウト（#81）。指定しないと ruff が edge_auto_capture をサードパーティ扱いし、
+# tests 側の絶対 import（from edge_auto_capture import ...）の並び順が意図と変わる。
+known-first-party = ["edge_auto_capture"]

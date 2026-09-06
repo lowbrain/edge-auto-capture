@@ -9,7 +9,7 @@
 （edge_auto_capture の main）が持ち、ここは「何を・どう起動するか」の定義だけを担う。
 """
 
-from config import Config
+from .config import Config
 
 # ブラウザの定義: config.browser のキー → (channel, 表示名, 実行パスの config 項目名)。
 #   channel   … Playwright の channel 名（標準インストール先を自動検出。未インストールなら起動時に例外）。

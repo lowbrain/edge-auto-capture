@@ -110,19 +110,17 @@
    `warn_unused_ignores = true` ゆえ **OS 次第で必ず片方が落ちる**。だから ignore を撤去して
    `Any` 経由に変えてある。`getattr` は ruff の `B009` と衝突するため不採用。
 
-10. **新モジュール（`lineage.py` / `browser.py` / サニタイズ器 等）を足すときは `py-modules` を更新** —
-    漏れると配布が**黙って割れる**。[`pyproject.toml`](pyproject.toml) の
-    `[tool.setuptools] py-modules` へモジュール名を追加する。**手で追記が要るのはここ 1 箇所だけ。**
-    `[tool.mypy]` は `files = ["."]` + `exclude` 方式なので追記不要（列挙方式は新モジュールを
-    検査対象へ入れ忘れて型エラーが素通りする罠で、#40 で実際に起きたため構造的に潰した。
-    理由は [`pyproject.toml`](pyproject.toml) の `[tool.mypy]` のコメント参照。**列挙方式へ戻さないこと**）。
-    `ruff` も `extend-exclude` 方式なので追記不要、[`build.ps1`](build.ps1) は import 追従なので変更不要。
-    **CI も `mypy .`（対象は `[tool.mypy] files` 由来）で回す。**CI 側に検査対象を列挙し直さないこと —
-    引数は `files` を上書きするので、`files = ["."]` にしていても CI だけ新モジュールを検査しなくなる。
-
-11. **コメントは資産。関数を移動するときは一緒に運ぶ** — 各所の日本語コメントは
+10. **コメントは資産。関数を移動するときは一緒に運ぶ** — 各所の日本語コメントは
     `A-1` / `A-2` / `B-3` / `E-6` 等の落とし穴回避の記録。リファクタで関数を移すときも
     コメントを削らない・要約しない。**接頭辞の意味は冒頭の「課題タグの凡例」を参照。**
+
+11. **`infra.BASE_DIR`（＝ `config.ini` / `output/` / `log.txt` の基準フォルダ）は
+    非 frozen 実行では「カレントディレクトリ」であって「パッケージフォルダ」ではない**（#81）。
+    `_base_dir()` はかつて `Path(__file__).parent`（このモジュールのあるフォルダ）を
+    使っていたが、`src/` レイアウト化（パッケージ化）すると `__file__` はインストール先の
+    パッケージフォルダを指すようになり、`pip install` したコマンドを実行した場所とは
+    無関係な場所で `config.ini` を探し・`output/` を作ろうとして壊れる。それを避けるため
+    非 frozen 側は `Path.cwd()` を返す（frozen 側＝exe 実行は無変更で `sys.executable` の親）。
 
 > **行番号について**: このファイルは意図的に行番号ではなく**シンボル名**で場所を指している。
 > 過去に行番号で書いた参照はコードの成長で軒並みずれた。
@@ -167,8 +165,8 @@ mypy .
   `build.ps1` / `infra._message_box_windows` の `ctypes.windll` / `%LOCALAPPDATA%` 退避（`D-C1`）/
   実 Edge 固有の挙動は対象外。実機検証の現在地は Issue
   [#78](https://github.com/lowbrain/edge-auto-caputure/issues/78) の「検証状況」が正。
-- **新モジュールを足したときは** §1-10 のとおり `[tool.setuptools] py-modules` を更新する
-  （`[tool.mypy]` は `files = ["."]` + `exclude` 方式なので追記不要。列挙方式へ戻さないこと）。
+- **新モジュールを足すときは `src/edge_auto_capture/` へ置くだけでよい**（`packages.find` が自動検出する。#81）。
+  `[tool.mypy]` は `files = ["."]` + `exclude` 方式なので追記不要。列挙方式へ戻さないこと。
 - リファクタでは**新規テストを足せる場所は足す**（純粋関数・判定ロジック・レジストリ等はブラウザ無しで単体化できる）。
 - `ruff` は `line-length = 120`、`select = ["E", "F", "I", "UP", "B"]`。
 

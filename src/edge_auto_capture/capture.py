@@ -24,10 +24,10 @@ from typing import Optional
 
 from playwright.async_api import Page
 
-import badge
-from config import Config
-from infra import iso_timestamp, log, ms3
-from lineage import group_folder_name, group_subdir
+from . import badge
+from .config import Config
+from .infra import iso_timestamp, log, ms3
+from .lineage import group_folder_name, group_subdir
 
 # 索引 CSV のファイル名と見出し。撮影ごとに 1 行追記して「いつ・何を撮ったか」を一覧にする（F-A1）。
 INDEX_CSV_NAME = "index.csv"

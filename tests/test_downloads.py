@@ -9,10 +9,10 @@ download イベントで save_as して保存先へ退避することで初め�
 import asyncio
 from pathlib import Path
 
-from browser import browser_launch_kwargs
-from config import Config
-from downloads import _downloads_dir, _unique_path
-from edge_auto_capture import CaptureSession
+from edge_auto_capture.app import CaptureSession
+from edge_auto_capture.browser import browser_launch_kwargs
+from edge_auto_capture.config import Config
+from edge_auto_capture.downloads import _downloads_dir, _unique_path
 
 
 class FakeDownload:

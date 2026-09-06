@@ -23,7 +23,7 @@ from pathlib import Path
 
 from playwright.async_api import Page
 
-from infra import log, ms3
+from .infra import log, ms3
 
 
 def group_stamp() -> str:

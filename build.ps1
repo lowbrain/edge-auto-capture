@@ -1,5 +1,5 @@
 ﻿# ============================================================
-#  edge_auto_capture.py を単一EXE(フォルダ形式)へビルドする。
+#  edge_auto_capture パッケージ（src/edge_auto_capture/）を単一EXE(フォルダ形式)へビルドする。
 #  Python 未導入の Windows PC へ配布できる形にまとめる。
 #  実行例: powershell -ExecutionPolicy Bypass -File build.ps1
 #
@@ -30,7 +30,8 @@ if ($LASTEXITCODE -ne 0) { Write-Host "依存のインストールに失敗し�
 Write-Host "[2/6] exe プロパティ用のバージョン情報ファイルを生成します ..."
 # 右クリック→プロパティ→詳細でバージョンが見えるようにする（--version-file）。
 # 版の出所は infra.__version__ に一本化（D-B1）。ここで直書きせず Python から取り出す。
-$ver = (python -c "import infra; print(infra.__version__)")
+# 直前の pip install -e ".[build]" で edge_auto_capture がインストール済みなので import できる。
+$ver = (python -c "import edge_auto_capture.infra as infra; print(infra.__version__)")
 if ($LASTEXITCODE -ne 0) { Write-Host "バージョンの取得に失敗しました。" -ForegroundColor Red; exit 1 }
 $ver = $ver.Trim()
 # filevers/prodvers は 4 個の整数タプル。x.y.z を (x, y, z, 0) に整える（欠けは 0 埋め）。
@@ -66,12 +67,13 @@ Set-Content -Encoding ascii -Path $verFile -Value $verContent
 Write-Host "  バージョン $ver を埋め込みます: $verFile" -ForegroundColor Green
 
 Write-Host "[3/6] PyInstaller でビルドします ..."
-# --collect-all playwright : Playwright の node ドライバを同梱（凍結時に必須）
-# --noconsole              : 黒いコンソール窓を出さない（動作ログは log.txt に出力）
-# --add-data "badge.js;."  : 操作バーのページ側 JS を同梱（badge.py が _MEIPASS から読む）
-# --version-file           : exe プロパティへ版を埋め込む（上で生成した version_info.txt）
+# --collect-all playwright                     : Playwright の node ドライバを同梱（凍結時に必須）
+# --noconsole                                  : 黒いコンソール窓を出さない（動作ログは log.txt に出力）
+# --add-data "src\edge_auto_capture\badge.js;." : 操作バーのページ側 JS を _MEIPASS 直下へ同梱
+#                                                 （badge.py の _badge_js_path が sys._MEIPASS から読む）
+# --version-file                               : exe プロパティへ版を埋め込む（上で生成した version_info.txt）
 #   ※ badge.py / capture.py / config.py / infra.py は import から自動で辿られるので指定不要。
-pyinstaller --noconfirm --onedir --noconsole --name edge-auto-capture --collect-all playwright --add-data "badge.js;." --version-file "$verFile" edge_auto_capture.py
+pyinstaller --noconfirm --onedir --noconsole --name edge-auto-capture --collect-all playwright --add-data "src\edge_auto_capture\badge.js;." --version-file "$verFile" src\edge_auto_capture\__main__.py
 if ($LASTEXITCODE -ne 0) { Write-Host "ビルドに失敗しました。上のメッセージを確認してください。" -ForegroundColor Red; exit 1 }
 
 $dist = Join-Path $root "dist\edge-auto-capture"

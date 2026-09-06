@@ -9,9 +9,9 @@ CaptureSession.on_download は系譜解決だけ行い、本体の保存は save
 
 from pathlib import Path
 
-from config import Config
-from infra import log
-from lineage import group_folder_name, group_subdir
+from .config import Config
+from .infra import log
+from .lineage import group_folder_name, group_subdir
 
 
 def _downloads_dir(config: Config, group_id: str = "") -> Path:
