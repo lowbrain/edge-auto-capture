@@ -16,6 +16,8 @@ test_packaging.py と同じ「漏れても 4 点セットのどれも落ちな�
 - Issue の URL リンクがロードマップ Issue を指していること（例外は下の許可リストへ
   理由付きで置く）
 - 退役したロードマップ Issue 番号が、歴史的言及として許可した場所にしか出ないこと
+- `CONTRIBUTING.md` の節番号（`§N` / `§N-M`）の参照先が実在すること（項目の挿入・
+  並べ替えで参照が別の節を指す silent drift を落とす）
 
 **指し先を差し替えるときの手順**: 下の ROADMAP_ISSUE を新番号にし、旧番号を
 RETIRED_ROADMAP_ISSUES へ足す。すると残った旧番号の参照が URL・素の `#N` の両方とも
@@ -82,6 +84,23 @@ GITHUB_URL = re.compile(r"https://github\.com/(?P<slug>[\w.-]+/[\w.-]+)(?P<rest>
 ISSUE_URL = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/issues/(?P<num>\d+)")
 ISSUE_LINK = re.compile(r"\[#(?P<label>\d+)\]\((?P<url>https://github\.com/[^)]+)\)")
 BARE_REF = re.compile(r"(?<![\w#])#(?P<num>\d+)\b")
+
+# `CONTRIBUTING.md` の節見出し。番号は本文の文字列として持たせてある（順序付きリストの
+# 自動採番だと、項目を挿入したときに参照側 16 箇所が黙って別の節を指す）。
+TOP_SECTION = re.compile(r"^## (?P<num>\d+)\. ", re.M)
+SUB_SECTION = re.compile(r"^### §(?P<num>\d+)-(?P<sub>\d+)\. ", re.M)
+
+# 節参照。`§1-6` のような枝番付きは CONTRIBUTING を指す用法しかないのでどこでも照合する。
+SUB_REF = re.compile(r"§(?P<num>\d+)-(?P<sub>\d+)")
+# 枝番なしの `§3` は、スキルが**自分自身の節**を指すのにも使う（`.claude/skills/verify/SKILL.md`
+# の「§3 の表」は同ファイルの `## 3.`）。誤検出を避けるため、無条件で照合するのは
+# 出所表と本体である下の 2 ファイルだけにし、他所は `CONTRIBUTING` で修飾された形だけ見る。
+BARE_SECTION_REF = re.compile(r"§(?P<num>\d+)(?!-\d)")
+QUALIFIED_SECTION_REF = re.compile(
+    r"CONTRIBUTING(?:\.md)?[`\s]*§(?P<num>\d+)(?:-(?P<sub>\d+))?"
+)
+# 枝番なしの `§N` を丸ごと照合するファイル（CONTRIBUTING 自身と、その出所表）。
+CONTRIBUTING_SCOPED = {"CONTRIBUTING.md", "CLAUDE.md"}
 
 
 def _tracked() -> list[str]:
@@ -229,4 +248,70 @@ def test_retired_module_mentions_are_all_still_needed():
     assert stale == [], (
         f"用済みの免除が残っている: {sorted(stale)}。"
         " 参照側の文が消えたなら RETIRED_MODULE_MENTIONS からも外す"
+    )
+
+
+def _contributing_sections() -> tuple[set[str], list[int], list[tuple[int, int]]]:
+    """CONTRIBUTING.md に実在する節の集合と、採番の並びを返す。"""
+    text = _read(ROOT / "CONTRIBUTING.md")
+    tops = [int(m.group("num")) for m in TOP_SECTION.finditer(text)]
+    subs = [(int(m.group("num")), int(m.group("sub"))) for m in SUB_SECTION.finditer(text)]
+    names = {f"{n}" for n in tops} | {f"{n}-{s}" for n, s in subs}
+    return names, tops, subs
+
+
+def test_contributing_section_numbers_are_consecutive():
+    """節番号に抜け・重複が無いこと（採番そのものの健全性）。
+
+    参照側の照合（下の test_section_references_point_at_an_existing_section）は
+    「指し先が在る」ことしか見ないので、`§1-3` を消して `§1-5` を 2 つ作るような
+    壊し方は素通りする。採番は出所側でも縛る。
+    """
+    names, tops, subs = _contributing_sections()
+    assert tops == list(range(1, len(tops) + 1)), f"`## N.` の採番が連番でない: {tops}"
+    assert len(tops) >= 4, f"節見出しを拾えていない（走査条件の壊れ）: {tops}"
+
+    ones = [s for n, s in subs if n == 1]
+    assert ones == list(range(1, len(ones) + 1)), f"`### §1-N.` の採番が連番でない: {ones}"
+    assert len(ones) >= 10, f"§1 の項目見出しを拾えていない（走査条件の壊れ）: {ones}"
+    assert len(names) == len(tops) + len(subs), "節番号が重複している"
+
+
+def test_section_references_point_at_an_existing_section():
+    """`§N` / `§N-M` の参照先が CONTRIBUTING.md に実在すること。
+
+    test_mentioned_python_files_exist と同じ「漏れても 4 点セットのどれも落ちない」型。
+    §1 の項目は CLAUDE.md の「変更前に読む場所」表・CONTRIBUTING 自身の相互参照・
+    `.claude/skills/` から名指しされていて、**項目を 1 つ挿入するだけで全部が黙って
+    別の項目を指す**。実際に節番号の繰り上げが起きたときは手作業で突き合わせた。
+
+    枝番なしの `§N` をどこまで照合するかは上の CONTRIBUTING_SCOPED / QUALIFIED_SECTION_REF
+    のコメントを参照（スキルは自分自身の節も `§N` で指すため、無条件には照合できない）。
+    """
+    names, _, _ = _contributing_sections()
+
+    checked, missing = 0, []
+
+    def check(rel: str, ref: str) -> None:
+        nonlocal checked
+        checked += 1
+        if ref not in names:
+            missing.append(f"{rel}: §{ref}")
+
+    for path in _files():
+        rel = _rel(path)
+        text = _read(path)
+        for m in SUB_REF.finditer(text):
+            check(rel, f"{m.group('num')}-{m.group('sub')}")
+        for m in QUALIFIED_SECTION_REF.finditer(text):
+            sub = m.group("sub")
+            check(rel, f"{m.group('num')}-{sub}" if sub else m.group("num"))
+        if rel in CONTRIBUTING_SCOPED:
+            for m in BARE_SECTION_REF.finditer(text):
+                check(rel, m.group("num"))
+
+    assert checked >= 20, f"節参照を拾えていない（走査条件の壊れ）: {checked} 件"
+    assert missing == [], (
+        f"実在しない節を指している: {sorted(set(missing))}。"
+        " 節を足す・並べ替えるときは参照側も直す"
     )
