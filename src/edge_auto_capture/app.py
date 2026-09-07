@@ -142,7 +142,9 @@ class CaptureSession:
         # こちら側は下のプロパティで読み取り専用ビューだけを公開する。
         self._lineage = LineageRegistry(config.target_selector)
         # --- ページごとの追跡情報 ---
-        self.seen: dict[Page, str] = {}           # page -> 直近のURL
+        # page -> 直近に撮った URL の比較キー（_url_key 済み＝フラグメントを落とした形）。
+        # 「同じページのままか」の判定に使う。生の URL ではないので _url_key を通してから引く。
+        self.last_url_key: dict[Page, str] = {}
         # framenavigated / close を配線済みのページ（二重配線を防ぐ）
         self._tracked: set[Page] = set()
 
@@ -249,7 +251,11 @@ class CaptureSession:
         return [pg for pg in self.context.pages if self.page_root.get(pg) is root]
 
     def _shoot(self, pg: Page, grp: GroupState, trigger: Trigger) -> str | None:
-        """1ページを撮る。url 取得失敗と撮影対象外 URL を弾き、撮れば url を返す（弾けば None）。
+        """1ページを撮る。撮ったら撮影した URL を、撮らなかったら None を返す。
+
+        **返り値の None は「撮らなかった」だけを意味する。** 理由（url 取得失敗か撮影対象外か）は
+        区別しないので、呼び出し側も区別しないこと。撮った URL を返すのは、呼び出し側が
+        追跡キー（last_url_key）を張るのに要るため。
 
         「url 取得 → 撮影可否判定 → runner.spawn」の定型を1か所に集約する（各コールバックと監視
         ループで同じ並びを書かないため）。撮影可否は should_capture に一元化（skip_urls /
@@ -268,8 +274,8 @@ class CaptureSession:
     async def on_toggle(self, source: dict, token: object = None) -> None:
         """「記録開始／停止」ボタン: 押したページのグループの記録状態を反転する。
 
-        ON にした瞬間は同じグループの現存ページを即撮影し、seen を現在 URL に
-        そろえる（撮り始めの体感を良くしつつ、直後のループでの二重取りも防ぐ）。
+        ON にした瞬間は同じグループの現存ページを即撮影し、last_url_key を現在 URL に
+        そろえる（撮り始めの体感を良くしつつ、直後の URL 変化での二重取りも防ぐ）。
         他のグループ（無関係な別タブ）の記録状態は変えない。
         """
         if not self._authorized(token):
@@ -283,15 +289,16 @@ class CaptureSession:
         if grp.on:
             root = self.page_root[source["page"]]
             for pg in self._group_pages(root):
-                # 記録開始時の即撮りは URL 追跡の基準（seen）を張る初回撮影なので契機は "url"。
+                # 記録開始時の即撮りは URL 追跡の基準（last_url_key）を張る初回撮影なので
+                # 契機は "url"。
                 url = self._shoot(pg, grp, "url")
                 if url is not None:
-                    self.seen[pg] = _url_key(url)
+                    self.last_url_key[pg] = _url_key(url)
 
     async def on_shot(self, source: dict, token: object = None) -> None:
         """「今すぐ1枚」ボタン: 記録状態に関わらず、押したページを1回だけ撮る。
 
-        seen は触らないので自動保存の判定には影響しない（記録ON中でも同一 URL の
+        last_url_key は触らないので自動保存の判定には影響しない（記録ON中でも同一 URL の
         「撮り直し」として別ファイルにもう1枚保存される）。撮影後はシャッター
         フラッシュで知らせる。
         """
@@ -534,7 +541,7 @@ class CaptureSession:
         """記録ONのグループのページを、前回と違うURLになっていれば1枚撮る。
 
         フラグメント（#...）だけの変化（scroll-spy）は撮り直さない。記録OFFのグループでは
-        seen を更新しないので、ON にした瞬間に現在ページが「変化」として検知され撮れる
+        last_url_key を更新しないので、ON にした瞬間に現在ページが「変化」として検知され撮れる
         （on_toggle でも即撮りするため通常は先回り）。撮影対象外 URL と url 取得失敗は _shoot が弾く。
         """
         grp = await self._resolve_group(page)
@@ -543,21 +550,23 @@ class CaptureSession:
         url = _page_url(page)
         if url is None:
             return
-        # 変化ゲート（seen 比較）は当所の責務。skip 判定と spawn は _shoot に委譲する。
-        # 撮れなかった（撮影対象外）ときは seen を更新せず、次に撮れる URL まで撮り直しを待つ。
+        # 変化ゲート（last_url_key 比較）は当所の責務。skip 判定と spawn は _shoot に委譲する。
         key = _url_key(url)
-        if self.seen.get(page) != key and self._shoot(page, grp, "url") is not None:
-            self.seen[page] = key
+        if self.last_url_key.get(page) == key:
+            return                       # 同じページのまま。撮り直さない
+        # 撮れなかった（撮影対象外）ときはキーを更新せず、次に撮れる URL まで撮り直しを待つ。
+        if self._shoot(page, grp, "url") is not None:
+            self.last_url_key[page] = key
 
     def _on_page_closed(self, page: Page) -> None:
         """閉じられたページを管理から除去する。
 
-        **追跡情報を外す唯一の場所。** ここを通らないと seen / _tracked が閉じた Page を
+        **追跡情報を外す唯一の場所。** ここを通らないと last_url_key / _tracked が閉じた Page を
         握り続ける（掃除を定期的に走らせる仕組みは無い）。系譜側の後始末（page_root の
         メモと、どの生存ページからも参照されなくなった root のグループ状態の破棄）はレジストリの
         release() へ任せる（root ページ自身が閉じても、ポップアップが残る間は保持される）。
         """
-        self.seen.pop(page, None)
+        self.last_url_key.pop(page, None)
         self._tracked.discard(page)
         self._lineage.release(page)
 
@@ -572,7 +581,7 @@ class CaptureSession:
         """
         # 起動直後の一掃: 既に読み込み済みで今後 framenavigated が来ない初期ページを、
         # 記録ONなら1枚撮る（イベントだけに任せると、この1枚を永久に取りこぼす）。
-        # start_url への goto が既に framenavigated を出して撮っていれば seen で重複を弾く。
+        # start_url への goto が既に framenavigated を出して撮っていればキーで重複を弾く。
         # 念のため配線も冪等に確認。
         for pg in list(self.context.pages):
             self._track_page(pg)

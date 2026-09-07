@@ -529,11 +529,11 @@ def test_shoot_if_changed_only_on_real_url_change():
         r = _GroupPage("r", url="https://example.test/a")
         s = _make_session([r], roots={r: GroupState(on=True, spa_on=False, selector="#x")})
 
-        # 初回: seen 空 → 撮る。seen が現URLキーにそろう。
+        # 初回: last_url_key 空 → 撮る。last_url_key が現URLキーにそろう。
         await s._shoot_if_changed(r)
         assert [c[1] for c in s.runner.calls] == ["https://example.test/a"]
 
-        # 同一URLで再度 → 撮らない（seen 一致）。
+        # 同一URLで再度 → 撮らない（last_url_key 一致）。
         await s._shoot_if_changed(r)
         assert len(s.runner.calls) == 1
 
@@ -554,12 +554,12 @@ def test_shoot_if_changed_gated_by_recording_and_skip_urls():
     from edge_auto_capture.app import GroupState
 
     async def scenario():
-        # 記録OFF → 撮らず seen も更新しない（ON にした瞬間の即撮りに委ねる）。
+        # 記録OFF → 撮らず last_url_key も更新しない（ON にした瞬間の即撮りに委ねる）。
         off = _GroupPage("off", url="https://example.test/x")
         s = _make_session([off], roots={off: GroupState(on=False, spa_on=False, selector="")})
         await s._shoot_if_changed(off)
         assert s.runner.calls == []
-        assert off not in s.seen
+        assert off not in s.last_url_key
 
         # skip_urls に一致 → 撮らない。
         cfg = Config(skip_urls=("https://skip.test/",))
@@ -592,7 +592,7 @@ def test_on_navigated_ignores_subframe_navigations():
 
 
 def test_on_page_closed_prunes_state_and_gcs_group():
-    # 閉じたページは seen / page_root / _tracked から消え、どの生存ページからも
+    # 閉じたページは last_url_key / page_root / _tracked から消え、どの生存ページからも
     # 参照されなくなった root のグループも捨てられる。ポップアップが残る間は保持する。
     from edge_auto_capture.app import GroupState
 
@@ -602,20 +602,20 @@ def test_on_page_closed_prunes_state_and_gcs_group():
         s = _make_session(
             [root, popup], roots={root: GroupState(on=True, spa_on=False, selector="")}
         )
-        # popup を root グループへ合流させ、追跡・seen も載せておく。
+        # popup を root グループへ合流させ、追跡・last_url_key も載せておく。
         await s._resolve_group(popup)
         s._tracked.update({root, popup})
-        s.seen[root] = "k1"
-        s.seen[popup] = "k2"
+        s.last_url_key[root] = "k1"
+        s.last_url_key[popup] = "k2"
 
         # root を閉じる: popup がまだ root を参照しているのでグループは残る。
         s._on_page_closed(root)
-        assert root not in s.seen and root not in s.page_root and root not in s._tracked
+        assert root not in s.last_url_key and root not in s.page_root and root not in s._tracked
         assert root in s.groups  # popup が参照中なので生存
 
         # popup も閉じる: root への参照が消え、グループが GC される。
         s._on_page_closed(popup)
-        assert popup not in s.seen and popup not in s.page_root
+        assert popup not in s.last_url_key and popup not in s.page_root
         assert s.groups == {}
 
     asyncio.run(scenario())
