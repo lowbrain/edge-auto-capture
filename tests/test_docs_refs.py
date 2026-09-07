@@ -18,6 +18,9 @@ test_packaging.py と同じ「漏れても 4 点セットのどれも落ちな�
 - 退役したロードマップ Issue 番号が、歴史的言及として許可した場所にしか出ないこと
 - `CONTRIBUTING.md` の節番号（`§N` / `§N-M`）の参照先が実在すること（項目の挿入・
   並べ替えで参照が別の節を指す silent drift を落とす）
+- Markdown の相対リンクの指し先ファイルが実在すること
+- 同一ファイル内の見出しアンカー（`](#...)`）が実在すること（目次は見出しを直した
+  瞬間に黙って死ぬので、機械側で縛る）
 
 **指し先を差し替えるときの手順**: 下の ROADMAP_ISSUE を新番号にし、旧番号を
 RETIRED_ROADMAP_ISSUES へ足す。すると残った旧番号の参照が URL・素の `#N` の両方とも
@@ -101,6 +104,10 @@ QUALIFIED_SECTION_REF = re.compile(
 )
 # 枝番なしの `§N` を丸ごと照合するファイル（CONTRIBUTING 自身と、その出所表）。
 CONTRIBUTING_SCOPED = {"CONTRIBUTING.md", "CLAUDE.md"}
+
+# Markdown のリンクと見出し。リンク先が外部 URL・mailto のものは対象外。
+MD_LINK = re.compile(r"\]\((?P<dest>[^)\s]+)\)")
+MD_HEADING = re.compile(r"^#{1,6} +(?P<text>.+?)\s*$", re.M)
 
 
 def _tracked() -> list[str]:
@@ -314,4 +321,71 @@ def test_section_references_point_at_an_existing_section():
     assert missing == [], (
         f"実在しない節を指している: {sorted(set(missing))}。"
         " 節を足す・並べ替えるときは参照側も直す"
+    )
+
+
+def _slug(heading: str) -> str:
+    """GitHub の見出しアンカー（github-slugger）を近似する。
+
+    小文字化 → 単語文字・ハイフン・空白以外を落とす → 空白をハイフンにする。
+    全角括弧や `・` は Unicode 上の約物なので落ち、`ー` のような長音は残る。
+    近似なので GitHub の実装と 1 対 1 ではないが、**この関数で目次を作り、この関数で
+    検査する**ので、見出しを直したときにリンクが取り残される drift は確実に落ちる。
+    """
+    text = re.sub(r"`", "", heading).strip().lower()
+    text = re.sub(r"[^\w\- ]", "", text, flags=re.UNICODE)
+    return text.replace(" ", "-")
+
+
+def _anchors(text: str) -> set[str]:
+    return {_slug(m.group("text")) for m in MD_HEADING.finditer(text)}
+
+
+def test_relative_links_point_at_existing_files():
+    """Markdown の相対リンクの指し先が実在すること。
+
+    `*.py` 参照（test_mentioned_python_files_exist）と同じ型の穴で、そちらが見るのは
+    `.py` だけ。`LICENSE` / `USAGE.txt` / `.github/workflows/ci.yml` /
+    `.claude/skills/*/SKILL.md` を指すリンクは誰も検査していなかった。
+    """
+    missing = []
+    for path in _files():
+        if path.suffix.lower() != ".md":
+            continue
+        for m in MD_LINK.finditer(_read(path)):
+            dest = m.group("dest")
+            if dest.startswith(("http://", "https://", "mailto:", "#")):
+                continue
+            target = dest.split("#", 1)[0]
+            if target and not (ROOT / target).exists():
+                missing.append(f"{_rel(path)}: {dest}")
+    assert missing == [], f"実在しないファイルへのリンク: {sorted(set(missing))}"
+
+
+def test_heading_anchors_exist():
+    """同一ファイル内の見出しアンカーが実在すること。
+
+    目次は「見出しを直すと黙って死ぬ」典型で、4 点セットのどれにも掛からない。
+    別ファイルの見出しへのリンク（`BUILD.md#...`）も、そのファイルの見出しで照合する。
+    """
+    cache: dict[Path, set[str]] = {}
+    broken = []
+    for path in _files():
+        if path.suffix.lower() != ".md":
+            continue
+        for m in MD_LINK.finditer(_read(path)):
+            dest = m.group("dest")
+            if dest.startswith(("http://", "https://", "mailto:")) or "#" not in dest:
+                continue
+            target, _, anchor = dest.partition("#")
+            doc = (ROOT / target) if target else path
+            if not doc.exists():
+                continue  # 指し先ファイルの不在は上のテストが出す
+            if doc not in cache:
+                cache[doc] = _anchors(_read(doc))
+            if anchor not in cache[doc]:
+                broken.append(f"{_rel(path)}: #{anchor}")
+    assert broken == [], (
+        f"実在しない見出しアンカーへのリンク: {sorted(set(broken))}。"
+        " 見出しを直したら目次側も直す"
     )
