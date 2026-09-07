@@ -6,7 +6,7 @@ description: USAGE.txt（Shift-JIS）を編集するときの手順。文字コ�
 # USAGE.txt（Shift-JIS）の編集
 
 `USAGE.txt` は**配布物に同梱する利用者向けの説明**で、リポジトリ内で唯一 **Shift-JIS**。
-（`README.md` / `CONTRIBUTING.md` / `CLAUDE.md` は UTF-8。）
+（`README.md` / `BUILD.md` / `CONTRIBUTING.md` / `CLAUDE.md` は UTF-8。）
 
 出所は `CONTRIBUTING.md` §1-4。このスキルはその手順を、**実測で裏を取った形**に具体化したもの。
 
@@ -110,5 +110,5 @@ UTF-8 端末では中身が文字化けして見えるので、**変更行数が
 
 ## 6. スコープ外
 
-- **`README.md` / `CONTRIBUTING.md` / `CLAUDE.md` は UTF-8。** このスキルは使わない
+- **`README.md` / `BUILD.md` / `CONTRIBUTING.md` / `CLAUDE.md` は UTF-8。** このスキルは使わない
 - USAGE.txt の**内容**をどう書くか（利用者向けの説明の質）は別の判断。ここは文字コードを壊さない手順のみ

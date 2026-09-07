@@ -16,6 +16,11 @@ test_packaging.py と同じ「漏れても 4 点セットのどれも落ちな�
 - Issue の URL リンクがロードマップ Issue を指していること（例外は下の許可リストへ
   理由付きで置く）
 - 退役したロードマップ Issue 番号が、歴史的言及として許可した場所にしか出ないこと
+- `CONTRIBUTING.md` の節番号（`§N` / `§N-M`）の参照先が実在すること（項目の挿入・
+  並べ替えで参照が別の節を指す silent drift を落とす）
+- Markdown の相対リンクの指し先ファイルが実在すること
+- 同一ファイル内の見出しアンカー（`](#...)`）が実在すること（目次は見出しを直した
+  瞬間に黙って死ぬので、機械側で縛る）
 
 **指し先を差し替えるときの手順**: 下の ROADMAP_ISSUE を新番号にし、旧番号を
 RETIRED_ROADMAP_ISSUES へ足す。すると残った旧番号の参照が URL・素の `#N` の両方とも
@@ -83,6 +88,27 @@ ISSUE_URL = re.compile(r"https://github\.com/[\w.-]+/[\w.-]+/issues/(?P<num>\d+)
 ISSUE_LINK = re.compile(r"\[#(?P<label>\d+)\]\((?P<url>https://github\.com/[^)]+)\)")
 BARE_REF = re.compile(r"(?<![\w#])#(?P<num>\d+)\b")
 
+# `CONTRIBUTING.md` の節見出し。番号は本文の文字列として持たせてある（順序付きリストの
+# 自動採番だと、項目を挿入したときに参照側 16 箇所が黙って別の節を指す）。
+TOP_SECTION = re.compile(r"^## (?P<num>\d+)\. ", re.M)
+SUB_SECTION = re.compile(r"^### §(?P<num>\d+)-(?P<sub>\d+)\. ", re.M)
+
+# 節参照。`§1-6` のような枝番付きは CONTRIBUTING を指す用法しかないのでどこでも照合する。
+SUB_REF = re.compile(r"§(?P<num>\d+)-(?P<sub>\d+)")
+# 枝番なしの `§3` は、スキルが**自分自身の節**を指すのにも使う（`.claude/skills/verify/SKILL.md`
+# の「§3 の表」は同ファイルの `## 3.`）。誤検出を避けるため、無条件で照合するのは
+# 出所表と本体である下の 2 ファイルだけにし、他所は `CONTRIBUTING` で修飾された形だけ見る。
+BARE_SECTION_REF = re.compile(r"§(?P<num>\d+)(?!-\d)")
+QUALIFIED_SECTION_REF = re.compile(
+    r"CONTRIBUTING(?:\.md)?[`\s]*§(?P<num>\d+)(?:-(?P<sub>\d+))?"
+)
+# 枝番なしの `§N` を丸ごと照合するファイル（CONTRIBUTING 自身と、その出所表）。
+CONTRIBUTING_SCOPED = {"CONTRIBUTING.md", "CLAUDE.md"}
+
+# Markdown のリンクと見出し。リンク先が外部 URL・mailto のものは対象外。
+MD_LINK = re.compile(r"\]\((?P<dest>[^)\s]+)\)")
+MD_HEADING = re.compile(r"^#{1,6} +(?P<text>.+?)\s*$", re.M)
+
 
 def _tracked() -> list[str]:
     try:
@@ -119,7 +145,7 @@ def _rel(path: Path) -> str:
 def test_scan_actually_finds_the_documents():
     # 走査条件を絞りすぎて「0 件だから緑」になっていないことの担保。
     names = {_rel(p) for p in _files()}
-    assert {"README.md", "CONTRIBUTING.md", "CLAUDE.md"} <= names
+    assert {"README.md", "BUILD.md", "CONTRIBUTING.md", "CLAUDE.md"} <= names
 
 
 def test_all_github_urls_use_the_canonical_slug():
@@ -229,4 +255,137 @@ def test_retired_module_mentions_are_all_still_needed():
     assert stale == [], (
         f"用済みの免除が残っている: {sorted(stale)}。"
         " 参照側の文が消えたなら RETIRED_MODULE_MENTIONS からも外す"
+    )
+
+
+def _contributing_sections() -> tuple[set[str], list[int], list[tuple[int, int]]]:
+    """CONTRIBUTING.md に実在する節の集合と、採番の並びを返す。"""
+    text = _read(ROOT / "CONTRIBUTING.md")
+    tops = [int(m.group("num")) for m in TOP_SECTION.finditer(text)]
+    subs = [(int(m.group("num")), int(m.group("sub"))) for m in SUB_SECTION.finditer(text)]
+    names = {f"{n}" for n in tops} | {f"{n}-{s}" for n, s in subs}
+    return names, tops, subs
+
+
+def test_contributing_section_numbers_are_consecutive():
+    """節番号に抜け・重複が無いこと（採番そのものの健全性）。
+
+    参照側の照合（下の test_section_references_point_at_an_existing_section）は
+    「指し先が在る」ことしか見ないので、`§1-3` を消して `§1-5` を 2 つ作るような
+    壊し方は素通りする。採番は出所側でも縛る。
+    """
+    names, tops, subs = _contributing_sections()
+    assert tops == list(range(1, len(tops) + 1)), f"`## N.` の採番が連番でない: {tops}"
+    assert len(tops) >= 4, f"節見出しを拾えていない（走査条件の壊れ）: {tops}"
+
+    ones = [s for n, s in subs if n == 1]
+    assert ones == list(range(1, len(ones) + 1)), f"`### §1-N.` の採番が連番でない: {ones}"
+    assert len(ones) >= 10, f"§1 の項目見出しを拾えていない（走査条件の壊れ）: {ones}"
+    assert len(names) == len(tops) + len(subs), "節番号が重複している"
+
+
+def test_section_references_point_at_an_existing_section():
+    """`§N` / `§N-M` の参照先が CONTRIBUTING.md に実在すること。
+
+    test_mentioned_python_files_exist と同じ「漏れても 4 点セットのどれも落ちない」型。
+    §1 の項目は CLAUDE.md の「変更前に読む場所」表・CONTRIBUTING 自身の相互参照・
+    `.claude/skills/` から名指しされていて、**項目を 1 つ挿入するだけで全部が黙って
+    別の項目を指す**。実際に節番号の繰り上げが起きたときは手作業で突き合わせた。
+
+    枝番なしの `§N` をどこまで照合するかは上の CONTRIBUTING_SCOPED / QUALIFIED_SECTION_REF
+    のコメントを参照（スキルは自分自身の節も `§N` で指すため、無条件には照合できない）。
+    """
+    names, _, _ = _contributing_sections()
+
+    checked, missing = 0, []
+
+    def check(rel: str, ref: str) -> None:
+        nonlocal checked
+        checked += 1
+        if ref not in names:
+            missing.append(f"{rel}: §{ref}")
+
+    for path in _files():
+        rel = _rel(path)
+        text = _read(path)
+        for m in SUB_REF.finditer(text):
+            check(rel, f"{m.group('num')}-{m.group('sub')}")
+        for m in QUALIFIED_SECTION_REF.finditer(text):
+            sub = m.group("sub")
+            check(rel, f"{m.group('num')}-{sub}" if sub else m.group("num"))
+        if rel in CONTRIBUTING_SCOPED:
+            for m in BARE_SECTION_REF.finditer(text):
+                check(rel, m.group("num"))
+
+    assert checked >= 20, f"節参照を拾えていない（走査条件の壊れ）: {checked} 件"
+    assert missing == [], (
+        f"実在しない節を指している: {sorted(set(missing))}。"
+        " 節を足す・並べ替えるときは参照側も直す"
+    )
+
+
+def _slug(heading: str) -> str:
+    """GitHub の見出しアンカー（github-slugger）を近似する。
+
+    小文字化 → 単語文字・ハイフン・空白以外を落とす → 空白をハイフンにする。
+    全角括弧や `・` は Unicode 上の約物なので落ち、`ー` のような長音は残る。
+    近似なので GitHub の実装と 1 対 1 ではないが、**この関数で目次を作り、この関数で
+    検査する**ので、見出しを直したときにリンクが取り残される drift は確実に落ちる。
+    """
+    text = re.sub(r"`", "", heading).strip().lower()
+    text = re.sub(r"[^\w\- ]", "", text, flags=re.UNICODE)
+    return text.replace(" ", "-")
+
+
+def _anchors(text: str) -> set[str]:
+    return {_slug(m.group("text")) for m in MD_HEADING.finditer(text)}
+
+
+def test_relative_links_point_at_existing_files():
+    """Markdown の相対リンクの指し先が実在すること。
+
+    `*.py` 参照（test_mentioned_python_files_exist）と同じ型の穴で、そちらが見るのは
+    `.py` だけ。`LICENSE` / `USAGE.txt` / `.github/workflows/ci.yml` /
+    `.claude/skills/*/SKILL.md` を指すリンクは誰も検査していなかった。
+    """
+    missing = []
+    for path in _files():
+        if path.suffix.lower() != ".md":
+            continue
+        for m in MD_LINK.finditer(_read(path)):
+            dest = m.group("dest")
+            if dest.startswith(("http://", "https://", "mailto:", "#")):
+                continue
+            target = dest.split("#", 1)[0]
+            if target and not (ROOT / target).exists():
+                missing.append(f"{_rel(path)}: {dest}")
+    assert missing == [], f"実在しないファイルへのリンク: {sorted(set(missing))}"
+
+
+def test_heading_anchors_exist():
+    """同一ファイル内の見出しアンカーが実在すること。
+
+    目次は「見出しを直すと黙って死ぬ」典型で、4 点セットのどれにも掛からない。
+    別ファイルの見出しへのリンク（`BUILD.md#...`）も、そのファイルの見出しで照合する。
+    """
+    cache: dict[Path, set[str]] = {}
+    broken = []
+    for path in _files():
+        if path.suffix.lower() != ".md":
+            continue
+        for m in MD_LINK.finditer(_read(path)):
+            dest = m.group("dest")
+            if dest.startswith(("http://", "https://", "mailto:")) or "#" not in dest:
+                continue
+            target, _, anchor = dest.partition("#")
+            doc = (ROOT / target) if target else path
+            if not doc.exists():
+                continue  # 指し先ファイルの不在は上のテストが出す
+            if doc not in cache:
+                cache[doc] = _anchors(_read(doc))
+            if anchor not in cache[doc]:
+                broken.append(f"{_rel(path)}: #{anchor}")
+    assert broken == [], (
+        f"実在しない見出しアンカーへのリンク: {sorted(set(broken))}。"
+        " 見出しを直したら目次側も直す"
     )
