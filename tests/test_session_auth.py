@@ -7,8 +7,10 @@
 実 Edge は不要（コールバックを直接呼ぶ純粋なロジックの検証）。
 """
 
+import ast
 import asyncio
 import inspect
+import pathlib
 
 import pytest
 from conftest import RecRunner
@@ -272,6 +274,48 @@ def test_every_exposed_binding_ignores_a_wrong_token(bad_token, monkeypatch):
     assert leaks == [], (
         f"token 照合が効いていないバインディング: {leaks}。"
         " 各コールバック冒頭の `if not self._authorized(token): return` を確認する"
+    )
+
+
+def test_page_facing_exposure_happens_in_exactly_one_place():
+    """`expose_binding` / `expose_function` の呼び出しは `src/` 全体で 1 箇所だけ。
+
+    上の総当たりが見られるのは **setup() が公開したもの**だけなので、setup() を通らない
+    経路で公開されると、対象に入らないまま照合の書き忘れが残る。実測した 3 通り:
+
+    | 新しいバインディングの足し方 | 落とす番人 |
+    |---|---|
+    | BIND_* を宣言し setup() の表に載せる | 上の総当たり（照合の欠落を直接見る） |
+    | BIND_* を宣言し setup() の外で公開する | 公開一覧と BIND_* の食い違い（下の 1 本と test_badge.py） |
+    | setup() の外でリテラル名で公開する | **どれも落とさなかった** |
+
+    3 つ目を塞ぐ。名前の書き方（リテラルか変数か）で縛ると、現在の「表をループして
+    公開する」形に依存してしまう（公開の書き方が変わると空振りする）。そうではなく
+    **公開の入口が 1 つであること**だけを縛れば、書き方に依らず「総当たりが全部を
+    見ている」が保たれる。
+
+    2 箇所目が要るようになったら、このテストを直す前に**総当たり側がその経路も
+    通るようにすること**。ここを緩めるだけだと、緩めた経路が検査されないまま残る。
+
+    `expose_function` も対象に入れる。現在は使っていないが、ページから呼べる口を増やす
+    同種の API なので、そちらへ逃げると同じ穴が空く。
+    """
+    exposers = {"expose_binding", "expose_function"}
+    call_sites = []
+    for path in sorted(pathlib.Path(app_mod.__file__).parent.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in exposers
+            ):
+                call_sites.append(f"{path.name}:{node.lineno}")
+
+    assert len(call_sites) == 1, (
+        f"ページへ公開する呼び出しが {len(call_sites)} 箇所ある: {call_sites}。"
+        " 公開は CaptureSession.setup() の 1 箇所へ集約する"
+        "（増やすと token 照合の総当たりの対象から外れ、書き忘れが残る）"
     )
 
 
