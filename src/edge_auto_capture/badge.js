@@ -42,7 +42,8 @@
 // 閲覧中サイトからの干渉・検知に対する防御（3 段構え）:
 //   1. シャドウは mode:'closed'。host.shadowRoot が null になるため、サイト側スクリプトは
 //      バー内部の要素を取得できず、ボタンを click() して記録操作を起こすこともできない。
-//      （open だった頃は、tok を知らなくても UI 経由で記録の開始/停止や連写を起こせた）
+//      **open へ戻さないこと** — open にすると、tok を知らないサイトでも UI 経由で
+//      記録の開始/停止や連写を起こせてしまう。
 //   2. expose_binding の参照はこの関数の冒頭で退避する（BOUND）。add_init_script はサイトの JS より
 //      先に走るので、ここで掴んだ参照は本物。サイトがバインディングの固定名を自前関数で包んでも、
 //      利用者のクリックはその関数を通らないため、第1引数の tok を盗まれない。
@@ -135,13 +136,13 @@
   let capDepth = 0;        // 進行中の撮影数（重なっても最後の1つで復帰させるための入れ子カウント）
   let frameTimer = null;   // シャッターフラッシュ（.flash クラス）を消すためのタイマー
   let barTimer = null;     // フラッシュ後にバー復帰を少し遅らせるためのタイマー
-  let countedSel = null;   // 一致件数を最後に計算したセレクタ（毎tickの無駄な再計算を避ける）
+  let countedSel = null;   // 一致件数を最後に計算したセレクタ（同じ値での再計算を避ける）
   let hiddenEls = [];      // 撮影中に隠した要素と復元用の元 visibility 値
 
   // --- SPA検知（中身変化のイベント駆動監視） ---
   // 変化は MutationObserver で捉え、SPA_SETTLE_MS のデバウンスで「落ち着いてから」署名を
-  // 確定し、前回と違えば Python へ通知する（C.bind.spaChanged）。**Python から毎tick 署名を
-  // 評価するポーリングにしないこと** — 変化があったときだけ計算するので負荷が下がる。
+  // 確定し、前回と違えば Python へ通知する（C.bind.spaChanged）。**Python 側から定期的に
+  // 署名を評価するポーリングにしないこと** — 変化があったときだけ計算するので負荷が下がる。
   const SPA_SETTLE_MS = (C.settleMs > 0) ? C.settleMs : 300;   // 変化が止まってから確定するまで
   const SPA_MAX_WAIT_MS = Math.max(SPA_SETTLE_MS * 5, 3000);   // 変化が続く場合でも確定する上限
   let spaLastSig = '';         // 最後に基準/通知した署名
@@ -312,8 +313,9 @@
     // 非フォーカス時のみ現在値と差があれば同期（別タブでの変更を反映）。
     if (shadow.activeElement !== els.sel && els.sel.value !== selector) els.sel.value = selector;
 
-    // 一致件数フィードバック。セレクタ文字列が変わったときだけ数え直す（apply は毎tick
-    // 呼ばれるが、同じセレクタなら件数表示は変わらないので querySelectorAll を無駄打ちしない）。
+    // 一致件数フィードバック。セレクタ文字列が変わったときだけ数え直す（apply は記録状態や
+    // 枚数の更新でも呼ばれるが、同じセレクタなら件数表示は変わらないので
+    // querySelectorAll を無駄打ちしない）。
     const s2 = (selector || '').trim();
     if (s2 !== countedSel) {
       countedSel = s2;
@@ -723,8 +725,8 @@
 
   // スモークテスト専用の入り口。シャドウが closed になったことで host.shadowRoot から
   // 中を検査できなくなったため、テストだけが使えるアクセサを用意する。
-  // 公開条件は「TOK が空」＝ badge.BADGE_SCRIPT（バインディングを公開しないテスト用ビルド）
-  // のときだけ。実運用は必ず token 付きで組み立てられる（badge.build_badge_script）ので、
+  // 公開条件は「TOK が空」＝ build_badge_script() を token 無しで呼んだテスト用ビルドの
+  // ときだけ。実運用は必ず token 付きで組み立てられる（badge.build_badge_script）ので、
   // この関数は本番のページには存在せず、closed の防御に穴を空けない。
   if (!TOK) window.__eac_debugRoot = () => shadow;
 

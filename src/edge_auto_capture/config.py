@@ -176,7 +176,7 @@ def _default_config_text() -> str:
 
     **呼ばれたときに読む（遅延読み込み）。** モジュール読み込み時に定数へ展開しないこと。
     import しただけで I/O が走ると、凍結（PyInstaller）環境などで失敗経路を 1 つ抱える
-    （badge.py が BADGE_SCRIPT のモジュール読み込み時生成をやめたのと同じ理由）。
+    （同梱データを読む側の共通規約。infra.package_data_path）。
 
     読み込みは改行を \\n へ正規化する（universal newlines）。書き出す側の write_text が
     プラットフォームの改行へ変換するので、Windows では CRLF で置かれる。

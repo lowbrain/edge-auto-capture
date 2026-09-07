@@ -63,8 +63,8 @@ def package_data_path(name: str) -> Path:
     2 つの意味で使うため、片方の理屈でもう片方を「直す」と静かに壊れる。
 
     呼び出し側は**読むたびに呼ぶ**こと（import 時に読み込んで定数化しない）。import
-    しただけで I/O が走ると、凍結環境などで失敗経路を 1 つ増やす（badge.py が
-    BADGE_SCRIPT のモジュール読み込み時生成をやめたのと同じ理由）。
+    しただけで I/O が走ると、凍結環境などで失敗経路を 1 つ増やす。同梱データを読む側
+    （badge.build_badge_script / config._default_config_text）も同じ扱いにする。
     """
     if getattr(sys, "frozen", False):
         base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))

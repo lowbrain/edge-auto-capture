@@ -1,46 +1,18 @@
-"""
-記録ONの間、Edge の URL / タブが変わるたびに、以下を同じフォルダへ自動保存するスクリプト。
-  - フルページのスクリーンショット  (.png)
-  - ページ全文テキスト              (.txt)
-  - ページ内の指定した一部だけ      (_part.txt)   ※セレクタ設定時のみ
+"""入口（cli / main）と、1 回の起動ぶんの監視セッション（CaptureSession）。
 
-撮影のタイミングは利用者が操作する。各ページ上部の操作バーで「記録開始／停止」により
-記録期間を制御し、「今すぐ1枚」で今のページを1回だけ撮れる。既定は記録OFF（待機）で
-起動する（config.ini の start_recording で変更可）。操作バーには記録中/待機中の表示に
-加え、上記ボタン・セレクタ入力欄・「SPA検知」トグル・バーを半透明にする「透過」トグルが
-並ぶ（保存する png / txt / part のいずれにも写し込まない）。
+記録ONの間、Edge の URL / タブが変わるたびに png / txt /（セレクタ設定時のみ）_part.txt を
+同じフォルダへ保存する。Edge の起動・監視・後始末までをこのモジュールが一括で受け持つ。
 
-SPA（URLが変わらず中身だけ変わるページ）向けに「SPA検知」を ON にすると、記録ON中はページの
-中身が変わるたびに自動保存する（同じ内容は署名比較で撮らない）。中身変化の検出はページ側
-（badge.js）がイベント駆動（MutationObserver＋落ち着きのデバウンス）で行う。入力欄に CSS
-セレクタを入れればその要素を監視し、空ならページ主要部（main/article、無ければ本文全体）を
-自動監視する。このセレクタは _part.txt の抜き出し対象も兼ねる（初期値は config.ini の
-target_selector）。
+**仕組み・使い方・設定はここへ書き写さない。** 出所は次のとおり:
 
-Edge の起動・監視・後始末はこのスクリプトが一括で行う（Playwright が毎回まっさらな一時
-プロファイルで Edge を起動し、終了時に自動で掃除する）。
+  - 何をどう保存するか、操作バー・SPA検知・保存先の構成  → README.md「仕組み（概要）」
+  - モジュール構成の一覧                                  → README.md「リポジトリ構成」
+  - 起動方法・config.ini の項目                           → README.md「開発時の実行」
+  - 利用者向けの使い方                                    → USAGE.txt
 
-本ファイルの役割は、入口（cli / main）と監視セッション（CaptureSession）。
-**モジュール構成の一覧は README.md の「構成」が正で、ここへは書き写さない。**
-`ls` で分かる一覧を二重に持つと、片方だけが実態に追随して嘘になる。
-取り残しは tests/test_docs_refs.py が落とす。
-
-事前準備:
-  pip install -e .          （または pip install playwright）
-  ※ インストール済みの Edge をそのまま使うため、playwright install は不要。
-
-起動方法:
-  - python -m edge_auto_capture（開発時。`pip install -e .` 済みなら
-    `edge-auto-capture` コマンドでも同じものが起動する）、または
-  - ビルドした edge-auto-capture.exe をダブルクリック（配布時）
-  設定は config.ini で変更する（起動ページ start_url、保存先など。start_url が空なら
-  about:blank）。config.ini と output\\ の置き場所は、通常実行なら**実行時のカレント
-  ディレクトリ**、exe 実行なら exe と同じフォルダ（infra._base_dir）。
-  開いた Edge で普通に閲覧すれば、記録ONの間だけ URL/タブの変化ごとに自動保存される。
-
-停止は「Edge のウィンドウを閉じる」だけでよい（コンソール実行時は Ctrl + C も使える）。
-停止時に、起動した Edge の終了と一時プロファイルの削除まで行う。動作ログは保存先
-（output_dir）フォルダの log.txt に残る。
+二重に持つと片方だけが実態に追随して嘘になる（CLAUDE.md 冒頭）。散文が実装とズレても
+4 点セットのどれも落ちないので、書き写さないことが唯一の防御になる。名指しした *.py の
+実在だけは tests/test_docs_refs.py が落とす。
 """
 
 import asyncio
@@ -132,7 +104,7 @@ class CaptureSession:
     無関係な別タブ（手動で開いたもの）は初期OFFの独立グループになる。
 
     SPA検知の中身変化の検出はページ側（badge.js）がイベント駆動で行い、落ち着いた変化を
-    __eac_spa_changed で通知してくる。ここではその通知を受けて撮る（毎tickの署名評価は無い）。
+    __eac_spa_changed で通知してくる。ここではその通知を受けて撮るだけで、署名の計算はしない。
     セレクタ未設定でも既定ルート（main/article/本文）を監視するため、spa_on は selector の
     有無に依らず ON にできる。
     """
@@ -192,7 +164,7 @@ class CaptureSession:
 
         記録ON/OFF・SPA検知・セレクタが変わった各コールバックがこれを呼ぶ。新規タブや
         サイト側の再描画で作り直されたバーは、バー自身が __eac_getstate で自己同期する
-        （badge.js）ため、ここでの毎tick配布は不要（ポーリングは廃止済み）。状態は
+        （badge.js）ので、こちらから配るのは状態が変わったときだけでよい。状態は
         グループごとに違うため、ページ単位で自分のグループの値を配る。ページ数ぶんを直列に
         待たず asyncio.gather で並列に流す。
         """
@@ -529,7 +501,7 @@ class CaptureSession:
         self._track_page(page)
         await self._shoot_if_changed(page)
 
-    # ---- URL変化・消滅のイベント配線（ポーリング廃止） ----
+    # ---- URL変化・消滅のイベント配線 ----
 
     def _track_page(self, page: Page) -> None:
         """このページの URL 変化（framenavigated）と消滅（close）をイベントで拾う。
@@ -577,9 +549,10 @@ class CaptureSession:
             self.seen[page] = key
 
     def _on_page_closed(self, page: Page) -> None:
-        """閉じられたページを管理から除去する（毎tickの _prune を置き換え）。
+        """閉じられたページを管理から除去する。
 
-        このセッションが持つ追跡情報（seen / _tracked）から消し、系譜側の後始末（page_root の
+        **追跡情報を外す唯一の場所。** ここを通らないと seen / _tracked が閉じた Page を
+        握り続ける（掃除を定期的に走らせる仕組みは無い）。系譜側の後始末（page_root の
         メモと、どの生存ページからも参照されなくなった root のグループ状態の破棄）はレジストリの
         release() へ任せる（root ページ自身が閉じても、ポップアップが残る間は保持される）。
         """
@@ -592,12 +565,14 @@ class CaptureSession:
 
         URL変化は page.on("framenavigated")、新規タブは context.on("page")、ページ消滅は
         page.on("close")、中身変化（SPA検知）は __eac_spa_changed（on_spa_changed）が、
-        それぞれイベントで保存を要求する。このメソッド自身は毎tickの URL 比較も状態配布も
-        行わず、閉じるまで待つだけ（poll_interval は廃止）。
+        それぞれイベントで保存を要求する。このメソッド自身は URL 比較も状態配布も行わず、
+        閉じるまで待つだけ。**ここへ定期実行を足さないこと** — 保存の契機は上の
+        4 イベントが漏れなく持っており、足すと同じ変化を二重に撮る。
         """
         # 起動直後の一掃: 既に読み込み済みで今後 framenavigated が来ない初期ページを、
-        # 記録ONなら1枚撮る（旧ループの最初のtick相当）。start_url への goto が既に
-        # framenavigated を出して撮っていれば seen で重複を弾く。念のため配線も冪等に確認。
+        # 記録ONなら1枚撮る（イベントだけに任せると、この1枚を永久に取りこぼす）。
+        # start_url への goto が既に framenavigated を出して撮っていれば seen で重複を弾く。
+        # 念のため配線も冪等に確認。
         for pg in list(self.context.pages):
             self._track_page(pg)
             await self._shoot_if_changed(pg)
@@ -698,12 +673,11 @@ async def main(config: Config) -> None:
                 shutil.rmtree(user_data_dir, ignore_errors=True)
             return
 
-        # 監視セッションを組む前に、操作対象の1枚を必ず用意しておく。setup() は「起動時に
-        # 開いているページ」を root グループとして種入れし（start_recording に従う）、URL変化・
-        # 消滅の監視まで配線するので、先に作っておけばページが1枚も無い環境でもその1枚が
-        # 同じ経路に乗る。setup() の後に作ると、setup() が張った context.on("page") 経由で
-        # on_new_page が先に走りえて、start_recording ではなく初期OFFの独立グループとして
-        # 採番されてしまう（種入れの重複実装もそこから生まれていた）。
+        # **この1枚は setup() より前に用意すること。** setup() は「起動時に開いているページ」を
+        # root グループとして種入れし（start_recording に従う）、URL変化・消滅の監視まで配線する
+        # ので、先に作っておけばページが1枚も無い環境でもその1枚が同じ経路に乗る。setup() の後に
+        # 作ると、setup() が張った context.on("page") 経由で on_new_page が先に走りえて、
+        # start_recording ではなく初期OFFの独立グループとして採番される。
         if not context.pages:
             await context.new_page()
 
