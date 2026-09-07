@@ -132,7 +132,7 @@ class CaptureSession:
     無関係な別タブ（手動で開いたもの）は初期OFFの独立グループになる。
 
     SPA検知の中身変化の検出はページ側（badge.js）がイベント駆動で行い、落ち着いた変化を
-    __eac_spa_changed で通知してくる。ここではその通知を受けて撮る（毎tickの署名評価は無い）。
+    __eac_spa_changed で通知してくる。ここではその通知を受けて撮るだけで、署名の計算はしない。
     セレクタ未設定でも既定ルート（main/article/本文）を監視するため、spa_on は selector の
     有無に依らず ON にできる。
     """
@@ -192,7 +192,7 @@ class CaptureSession:
 
         記録ON/OFF・SPA検知・セレクタが変わった各コールバックがこれを呼ぶ。新規タブや
         サイト側の再描画で作り直されたバーは、バー自身が __eac_getstate で自己同期する
-        （badge.js）ため、ここでの毎tick配布は不要（ポーリングは廃止済み）。状態は
+        （badge.js）ので、こちらから配るのは状態が変わったときだけでよい。状態は
         グループごとに違うため、ページ単位で自分のグループの値を配る。ページ数ぶんを直列に
         待たず asyncio.gather で並列に流す。
         """
@@ -529,7 +529,7 @@ class CaptureSession:
         self._track_page(page)
         await self._shoot_if_changed(page)
 
-    # ---- URL変化・消滅のイベント配線（ポーリング廃止） ----
+    # ---- URL変化・消滅のイベント配線 ----
 
     def _track_page(self, page: Page) -> None:
         """このページの URL 変化（framenavigated）と消滅（close）をイベントで拾う。
@@ -577,9 +577,10 @@ class CaptureSession:
             self.seen[page] = key
 
     def _on_page_closed(self, page: Page) -> None:
-        """閉じられたページを管理から除去する（毎tickの _prune を置き換え）。
+        """閉じられたページを管理から除去する。
 
-        このセッションが持つ追跡情報（seen / _tracked）から消し、系譜側の後始末（page_root の
+        **追跡情報を外す唯一の場所。** ここを通らないと seen / _tracked が閉じた Page を
+        握り続ける（掃除を定期的に走らせる仕組みは無い）。系譜側の後始末（page_root の
         メモと、どの生存ページからも参照されなくなった root のグループ状態の破棄）はレジストリの
         release() へ任せる（root ページ自身が閉じても、ポップアップが残る間は保持される）。
         """
@@ -592,12 +593,14 @@ class CaptureSession:
 
         URL変化は page.on("framenavigated")、新規タブは context.on("page")、ページ消滅は
         page.on("close")、中身変化（SPA検知）は __eac_spa_changed（on_spa_changed）が、
-        それぞれイベントで保存を要求する。このメソッド自身は毎tickの URL 比較も状態配布も
-        行わず、閉じるまで待つだけ（poll_interval は廃止）。
+        それぞれイベントで保存を要求する。このメソッド自身は URL 比較も状態配布も行わず、
+        閉じるまで待つだけ。**ここへ定期実行を足さないこと** — 保存の契機は上の
+        4 イベントが漏れなく持っており、足すと同じ変化を二重に撮る。
         """
         # 起動直後の一掃: 既に読み込み済みで今後 framenavigated が来ない初期ページを、
-        # 記録ONなら1枚撮る（旧ループの最初のtick相当）。start_url への goto が既に
-        # framenavigated を出して撮っていれば seen で重複を弾く。念のため配線も冪等に確認。
+        # 記録ONなら1枚撮る（イベントだけに任せると、この1枚を永久に取りこぼす）。
+        # start_url への goto が既に framenavigated を出して撮っていれば seen で重複を弾く。
+        # 念のため配線も冪等に確認。
         for pg in list(self.context.pages):
             self._track_page(pg)
             await self._shoot_if_changed(pg)
@@ -698,12 +701,11 @@ async def main(config: Config) -> None:
                 shutil.rmtree(user_data_dir, ignore_errors=True)
             return
 
-        # 監視セッションを組む前に、操作対象の1枚を必ず用意しておく。setup() は「起動時に
-        # 開いているページ」を root グループとして種入れし（start_recording に従う）、URL変化・
-        # 消滅の監視まで配線するので、先に作っておけばページが1枚も無い環境でもその1枚が
-        # 同じ経路に乗る。setup() の後に作ると、setup() が張った context.on("page") 経由で
-        # on_new_page が先に走りえて、start_recording ではなく初期OFFの独立グループとして
-        # 採番されてしまう（種入れの重複実装もそこから生まれていた）。
+        # **この1枚は setup() より前に用意すること。** setup() は「起動時に開いているページ」を
+        # root グループとして種入れし（start_recording に従う）、URL変化・消滅の監視まで配線する
+        # ので、先に作っておけばページが1枚も無い環境でもその1枚が同じ経路に乗る。setup() の後に
+        # 作ると、setup() が張った context.on("page") 経由で on_new_page が先に走りえて、
+        # start_recording ではなく初期OFFの独立グループとして採番される。
         if not context.pages:
             await context.new_page()
 

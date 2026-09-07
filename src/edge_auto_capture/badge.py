@@ -1,8 +1,8 @@
 """操作バー（各ページ上部に表示）のページ側 JS を組み立てるモジュール。
 
-- ページ側 JS の本体は隣の badge.js（実ファイル）に置く。実ファイルなので
-  エディタ/リンタで構文検査でき、以前の「Python 文字列内 JS の構文エラーが
-  実行するまで分からない」問題を避けられる。
+- ページ側 JS の本体は隣の badge.js（実ファイル）に置く。**Python の文字列リテラルへ
+  JS を書き戻さないこと** — 実ファイルならエディタ/リンタが構文検査できるが、文字列の中では
+  構文エラーが実際にページで実行されるまで分からない。
 - 表示文言（利用者に見える日本語など）は Python 側で定義し、_BADGE_CONFIG に
   まとめて 1 個の JSON として渡す。badge.js は設定を 1 個受け取る関数式なので、
   `(<badge.js>)(<設定 JSON>);` の形で呼び出すだけでよい。追加時に置換の
@@ -172,12 +172,10 @@ def build_badge_script(
     return f"({src})({json.dumps(config)});"
 
 
-# 完成済みスクリプト（token 無し）は、以前ここで BADGE_SCRIPT = build_badge_script() として
-# モジュール読み込み時に作っていたが、import しただけで badge.js の read_text（I/O）が走り、
-# 凍結（PyInstaller）環境などで失敗経路を 1 つ抱えていた。実運用では token 付きの
-# build_badge_script(token) を都度呼ぶだけで、この完成済みスクリプトは使わない。スモークテスト
-# など「バインディングを公開せず見た目だけ確認する」用途は、build_badge_script() を必要時に
-# 呼ぶ（＝遅延化）。これで import 時 I/O を無くした。
+# **build_badge_script() の結果をモジュール定数へ置かないこと。** import しただけで
+# badge.js の read_text（I/O）が走り、凍結（PyInstaller）環境などで失敗経路を 1 つ増やす。
+# 実運用は token 付きで都度呼ぶ。スモークテストのような「バインディングを公開せず見た目だけ
+# 確認する」用途も、必要時に token 無しで呼ぶ。
 
 # --- expose_binding で公開するバインディング名（ページ側 → Python の呼び出し口）---
 # **名前の出所はここだけ。** 下の _BIND_NAMES に載せて設定 JSON の bind キーで JS へ配る
@@ -260,7 +258,7 @@ def sig_call(ns: str) -> str:
     """SPA検知の署名。引数 sel を受け取る関数式（page.evaluate(sig_call(ns), selector) で使う）。
 
     **本番経路では未使用。** SPA検知の署名計算はページ側（badge.js の
-    MutationObserver + デバウンス）が行うので、Python から毎tick 署名を評価しない。
+    MutationObserver + デバウンス）が行うので、Python 側は署名を評価しない。
     呼び出し元は tests/smoke_badge.py の 1 箇所だけ
     （window[ns] 越しに signature が呼べるかというページ側ヘルパの疎通確認）。
 
