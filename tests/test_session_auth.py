@@ -205,6 +205,16 @@ def test_every_exposed_binding_ignores_a_wrong_token(bad_token, monkeypatch):
     test_setup_exposes_exactly_the_declared_bindings と同じ理由）。バインディングを
     増やせば、このテストの対象も自動で増える。
 
+    判定は 2 段構えで、**両方が要る**:
+
+    1. **構造** — 各コールバックが `_authorized` を 1 度は引くこと。コールバックが
+       何をするかに依らず落とせるので、**新しいコールバックが増えても効く**。
+    2. **挙動** — 照合が False を返したとき、実際に何も起きないこと。1 だけだと
+       「引いたが結果を無視した」を見逃す。
+
+    1 が無いと、副作用が下の _snapshot に映らない種類（外部プロセスの起動・ファイル
+    書き出し・新しい属性）の新コールバックが、照合を書き忘れたまま素通りする。
+
     グループは記録ON・SPA検知ON・セレクタ設定済みで始める。**どれかを OFF にしないこと** —
     on_spa_changed は記録OFF か SPA検知OFF なら照合を通っても撮らないので、
     照合の欠落が見えなくなる。
@@ -222,10 +232,26 @@ def test_every_exposed_binding_ignores_a_wrong_token(bad_token, monkeypatch):
         # setup() の種入れは spa_on=False 固定なので、ここで ON にしておく（docstring 参照）。
         session.groups[page].spa_on = True
 
+        # _authorized を見張る。**状態の比較だけでは足りない** — 新しいコールバックの
+        # 副作用が下の _snapshot に映らない種類（外部プロセスの起動・ファイル書き出し・
+        # 新しい属性）なら、照合を書き忘れても状態は動かず素通りする。「照合を必ず 1 度は
+        # 引く」という構造の側を見れば、コールバックが何をするかに依らず落とせる。
+        consulted: list = []
+        real_authorized = session._authorized
+
+        def _spy(token: object) -> bool:
+            consulted.append(token)
+            return real_authorized(token)
+
+        session._authorized = _spy   # type: ignore[method-assign]
+
         before = _snapshot(session, page)
         leaks = []
         for name, handler in ctx.handlers.items():
+            consulted.clear()
             result = await handler({"page": page}, bad_token, *_extra_args(handler))
+            if not consulted:
+                leaks.append(f"{name}: 照合そのものを引いていない")
             if _snapshot(session, page) != before:
                 leaks.append(f"{name}: 状態が変わった")
             if opened:
