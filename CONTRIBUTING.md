@@ -2,7 +2,7 @@
 
 「知らないと壊す仕掛け・作業環境・検証手順」に絞った恒久メモ。**変更前に §1 を読むこと。**
 
-- **これから作る / 直すもの（残タスクと優先順）は Issue [#78](https://github.com/lowbrain/edge-auto-capture/issues/78)（ピン留め）が正。**
+- **これから作る / 直すもの（残タスクと優先順）は Issue [#120](https://github.com/lowbrain/edge-auto-capture/issues/120)（ピン留め）が正。**
 - ツールの仕組み・設定リファレンス・テストは [`README.md`](README.md)。
 - 配布用 exe のビルド・署名・配布は [`BUILD.md`](BUILD.md)。
 - 過去の完了作業の実装内容は git 履歴を参照。
@@ -251,8 +251,8 @@ mypy .
   ブラウザ不在環境で「何も検証せず緑」になる）。SKIP されたら報告では「未検証」と明記する。
 - **smoke が緑でも Windows 実機検証の代わりにはならない。** smoke が見るのは操作バーの JS で、
   `build.ps1` / `infra._message_box_windows` の `ctypes.windll` / `%LOCALAPPDATA%` 退避 /
-  実 Edge 固有の挙動は対象外。実機検証の現在地は Issue
-  [#78](https://github.com/lowbrain/edge-auto-capture/issues/78) の「検証状況」が正。
+  実 Edge 固有の挙動は対象外。実機で埋める残りは Issue
+  [#120](https://github.com/lowbrain/edge-auto-capture/issues/120) の「未検証（実機で埋める）」が正。
 - **新モジュールを足すときは `src/edge_auto_capture/` へ置くだけでよい**（`packages.find` が自動検出する。#81）。
   `[tool.mypy]` は `files = ["."]` + `exclude` 方式なので追記不要。列挙方式へ戻さないこと。
 - リファクタでは**新規テストを足せる場所は足す**（純粋関数・判定ロジック・レジストリ等はブラウザ無しで単体化できる）。
@@ -277,7 +277,7 @@ CI（GitHub Actions）でも同じ 4 点が回る（[`.github/workflows/ci.yml`]
   （二重管理になり、実際に食い違いが起きた。経緯は [#38](https://github.com/lowbrain/edge-auto-capture/issues/38) 冒頭）。
 - **ドキュメント・スキルに「いつ時点」を持たせない。** 「〜時点で未検証」「最終確認: YYYY-MM-DD」の
   ような日付・コミットハッシュ入りの現在地を本文へ書かない（書いた瞬間から古びるが、
-  何のチェックにも掛からない）。現在地は Issue
-  [#78](https://github.com/lowbrain/edge-auto-capture/issues/78) が正で、ドキュメント側は
+  何のチェックにも掛からない）。残タスクと未検証の現在地は Issue
+  [#120](https://github.com/lowbrain/edge-auto-capture/issues/120) が正で、ドキュメント側は
   そこを指すにとどめる。**Issue 本文へ書く検証結果は逆で、「いつ・どのコミットを」検証したかを明記する**
   （そちらは記録なので日付が要る）。

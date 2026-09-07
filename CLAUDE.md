@@ -20,10 +20,10 @@ Claude Code 向けの**導線**。ここは内容の出所ではない。
 | 仕組み・設定・テスト | [`README.md`](README.md) |
 | 配布用 exe のビルド・署名・配布・IT への許可依頼 | [`BUILD.md`](BUILD.md) |
 | 利用者向けの使い方（Shift-JIS） | [`USAGE.txt`](USAGE.txt) |
-| **残タスクと現在地・個々のタグの状態** | Issue [#78](https://github.com/lowbrain/edge-auto-capture/issues/78)（ピン留め・これが正） |
+| **残タスクと未検証の一覧** | Issue [#120](https://github.com/lowbrain/edge-auto-capture/issues/120)（ピン留め・これが正） |
 | 過去の完了作業の実装内容 | git 履歴 |
 
-**ドキュメントに残タスクの一覧を作らない**（#78 の運用ルール）。
+**ドキュメントに残タスクの一覧を作らない**（#120 の運用ルール）。
 
 **ドキュメント（`README.md` / `BUILD.md` / `CONTRIBUTING.md` / このファイル）を直すときはスキル `/docs-edit`** — 書く場所を上の出所表から決め、指し先の波及を洗い、`tests/test_docs_refs.py` を回すまでを扱う。`USAGE.txt` は `/usage-txt`（Shift-JIS）。
 

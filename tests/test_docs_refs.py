@@ -6,6 +6,8 @@ test_packaging.py と同じ「漏れても 4 点セットのどれも落ちな�
 
 実際に一度起きている。ロードマップ Issue の差し替え（#38 → #78）では 5 ファイル
 15 箇所を手作業で掃除し、歴史的な言及として #38 のまま残す 2 箇所との判別も手作業だった。
+2 回目の差し替え（#78 → #120）は、下の定数 2 つを直すだけで残り 8 箇所が失敗の一覧として
+出た（＝この番人が効いた回）。
 
 縛るもの:
 
@@ -48,10 +50,10 @@ ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_SLUG = "lowbrain/edge-auto-capture"
 
 # 「これが正」として指しているロードマップ Issue（ピン留め・CONTRIBUTING 冒頭）。
-ROADMAP_ISSUE = 78
+ROADMAP_ISSUE = 120
 
 # 退役したロードマップ Issue。ここへ入れると「残っていないこと」が縛られる。
-RETIRED_ROADMAP_ISSUES = {38}
+RETIRED_ROADMAP_ISSUES = {38, 78}
 
 # 歴史的言及として残してよい場所（パス, Issue 番号）→ 理由。
 # ロードマップの指し先ではなく、そこで起きた出来事の出典なので差し替えない。
