@@ -60,12 +60,6 @@ HISTORICAL_MENTIONS = {
 # （読み手が今あるファイルだと思い込む。実際 app.py の docstring が #81 の改名後も
 # 「python edge_auto_capture.py（開発時）」と動かない手順を指示し続けていた）。
 RETIRED_MODULE_MENTIONS = {
-    ("src/edge_auto_capture/browser.py", "edge_auto_capture.py"):
-        "「以前は edge_auto_capture.py 内のモジュール関数だった」という切り出しの経緯",
-    ("src/edge_auto_capture/downloads.py", "edge_auto_capture.py"):
-        "「以前は edge_auto_capture.py の CaptureSession が持っていた」という切り出しの経緯",
-    ("src/edge_auto_capture/lineage.py", "edge_auto_capture.py"):
-        "「以前は edge_auto_capture.py の CaptureSession が持っていた」という新設の経緯",
     ("README.md", "edge_auto_capture.py"):
         "「src/ レイアウト化で python edge_auto_capture.py は使えなくなった」の告知",
 }
@@ -211,4 +205,28 @@ def test_mentioned_python_files_exist():
         f"実在しない .py を名指ししている: {sorted(set(missing))}。"
         " 改名・移動したなら参照側も直す。退役した名前を歴史として語るなら"
         " RETIRED_MODULE_MENTIONS へ理由付きで足す"
+    )
+
+
+def test_retired_module_mentions_are_all_still_needed():
+    """RETIRED_MODULE_MENTIONS に用済みのエントリが残っていないこと。
+
+    この辞書は「実在しない .py を名指ししてよい場所」の免除リストで、**免除は当たらなく
+    なっても誰も気づかない**。参照側の文が消えた（例: 経緯コメントを git へ返した）あとも
+    エントリが残ると、次に同じ場所へ同じ名前を書いたときに黙って見逃す穴になる。
+
+    上の test_mentioned_python_files_exist と対で、免除の過不足を両側から縛る。
+    """
+    stale = []
+    for (rel, name), why in RETIRED_MODULE_MENTIONS.items():
+        path = ROOT / rel
+        if not path.exists():
+            stale.append(f"{rel}: ファイルが無い（{why}）")
+            continue
+        if not any(m.group("name") == name for m in PY_FILE.finditer(_read(path))):
+            stale.append(f"{rel}: {name} をもう名指ししていない（{why}）")
+
+    assert stale == [], (
+        f"用済みの免除が残っている: {sorted(stale)}。"
+        " 参照側の文が消えたなら RETIRED_MODULE_MENTIONS からも外す"
     )
