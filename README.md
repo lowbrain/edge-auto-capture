@@ -10,7 +10,7 @@ Microsoft Edge（無ければ Google Chrome）で開いたページを、**記�
 > **配布用 exe のビルド・署名・配布・IT への許可依頼**は [BUILD.md](BUILD.md)。
 > **このコードを触るときの落とし穴・作業環境・検証手順**は [CONTRIBUTING.md](CONTRIBUTING.md)。
 > **これから作る / 直すもの（残タスクと優先順）**は
-> Issue [#78](https://github.com/lowbrain/edge-auto-capture/issues/78)（ピン留め）が正。
+> Issue [#120](https://github.com/lowbrain/edge-auto-capture/issues/120)（ピン留め）が正。
 
 ## 目次
 
