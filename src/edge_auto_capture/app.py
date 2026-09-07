@@ -39,6 +39,7 @@ from .browser import browser_candidates, browser_launch_kwargs
 from .capture import (
     CaptureRequest,
     CaptureRunner,
+    Trigger,
     try_eval,
 )
 from .config import Config, ConfigFatalError, load_config, should_capture, summarize_config
@@ -247,14 +248,14 @@ class CaptureSession:
         """root を共有する現存ページ（＝同じグループのページ）を返す。"""
         return [pg for pg in self.context.pages if self.page_root.get(pg) is root]
 
-    def _shoot(self, pg: Page, grp: "GroupState", trigger: str) -> str | None:
+    def _shoot(self, pg: Page, grp: GroupState, trigger: Trigger) -> str | None:
         """1ページを撮る。url 取得失敗と撮影対象外 URL を弾き、撮れば url を返す（弾けば None）。
 
         「url 取得 → 撮影可否判定 → runner.spawn」の定型を1か所に集約する（各コールバックと監視
         ループで同じ並びを書かないため）。撮影可否は should_capture に一元化（skip_urls /
         allow_urls / 前方一致・fnmatch）。記録状態のゲートは呼び出し側の責務（ここでは見ない）。
         撮影対象の抜き出しセレクタは、そのページが属するグループの selector を使う。
-        trigger は撮影契機（"manual"/"url"/"spa"）で、CaptureRequest に載せて索引 CSV まで通す。
+        trigger は撮影契機（capture.Trigger）で、CaptureRequest に載せて索引 CSV まで通す。
         """
         url = _page_url(pg)
         if url is None:

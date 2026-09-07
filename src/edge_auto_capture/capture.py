@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from playwright.async_api import Page
 
@@ -32,13 +33,23 @@ from .lineage import group_folder_name, group_subdir
 INDEX_CSV_NAME = "index.csv"
 INDEX_CSV_HEADER = ["時刻", "URL", "タイトル", "ファイル名接頭辞", "撮影契機", "セレクタ", "成否"]
 
-# 撮影契機（CaptureRequest.trigger）の内部値 → 索引 CSV に書く日本語表記。
-# 内部は経路を跨いでも壊れにくい短い英字（"manual"/"url"/"spa"）、CSV は人が読む列なので日本語。
-_TRIGGER_LABELS = {"manual": "手動", "url": "URL変化", "spa": "SPA変化"}
+# 撮影契機。**取りうる値の出所はこの 1 行。** 素の str にしないこと — 綴りを誤っても
+# エラーもテストの失敗も出ないまま挙動だけが変わる（_capture の `req.trigger != "spa"` は
+# 誤ると SPA 経由の撮影だけが settle_delay ぶん余計に待つ）。Literal にすれば mypy が落とす。
+# "" は未指定（撮影実行器を単体で使うテスト等）。
+Trigger = Literal["manual", "url", "spa", ""]
+
+# 撮影契機の内部値 → 索引 CSV に書く日本語表記。
+# 内部は経路を跨いでも壊れにくい短い英字、CSV は人が読む列なので日本語。
+_TRIGGER_LABELS: dict[str, str] = {"manual": "手動", "url": "URL変化", "spa": "SPA変化"}
 
 
 def trigger_label(trigger: str) -> str:
-    """撮影契機の内部値を索引 CSV 用の日本語表記へ。未知・未設定はそのまま（空なら空）返す。"""
+    """撮影契機の内部値を索引 CSV 用の日本語表記へ。未知・未設定はそのまま（空なら空）返す。
+
+    引数を Trigger ではなく str で受けるのは、索引 CSV が「後から来た未知の値でも
+    列を落とさず素通しする」側の都合を持つため（値の正しさは呼び出し前に型で担保する）。
+    """
     return _TRIGGER_LABELS.get(trigger, trigger)
 
 # safe_name() がファイル名スラッグを切り詰める最大長。
@@ -124,8 +135,8 @@ class CaptureRequest:
     page は撮影対象ページ。_pending / _workers のキーでもあるが、要求そのものにも保持して
     「1 要求＝1 オブジェクト」で完結させる。selector は _part.txt 抜き出しの対象（実行時の
     バー入力値）。group_id は保存先サブフォルダ（lineage-<id>）と保存ログの系譜表記に使う。
-    trigger は撮影契機（"manual"=今すぐ1枚 / "url"=URL変化・記録開始時 / "spa"=SPA変化）で、
-    投入元 3 経路から _capture の索引 CSV まで貫通させる。既定は空（未指定）。
+    trigger は撮影契機（Trigger）で、投入元 3 経路から _capture の索引 CSV まで貫通させる。
+    既定は空（未指定）。
     """
 
     page: Page
@@ -133,7 +144,7 @@ class CaptureRequest:
     config: Config
     selector: str = ""
     group_id: str = ""
-    trigger: str = ""
+    trigger: Trigger = ""
 
 
 class CaptureRunner:
