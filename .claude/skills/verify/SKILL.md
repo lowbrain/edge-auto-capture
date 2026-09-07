@@ -18,24 +18,37 @@ CONTRIBUTING §4 の「未検証の項目は必ず『未検証』と明記する
 前提: `pip install -e ".[dev]"` 済み。このリポジトリでは `.venv/bin/` 配下に入っている。
 
 ```bash
-rm -rf ~/Library/Caches/com.apple.python"$PWD"   # macOS のみ。理由は下
+# バイトコードキャッシュを消す（macOS 開発機のみ。理由は下）
+prefix=$(python -c "import sys; print(sys.pycache_prefix or '')")
+if [ -n "$prefix" ]; then
+  rm -rf "$prefix$PWD"
+else
+  find . -path ./.venv -prune -o -name __pycache__ -type d -exec rm -rf {} +
+fi
+
 pytest
 python tests/smoke_badge.py --strict
 ruff check .
 mypy .
 ```
 
-**1 行目を落とさない（macOS 開発機のみ・Windows 実機では不要）。** この機の `.venv` は
-Apple の Command Line Tools 同梱 python3 を土台にしており、`.pyc` がリポジトリ内ではなく
-`~/Library/Caches/com.apple.python/` 配下に置かれる。**同じバイト長の書き換えを同一秒内に
+**先頭のブロックを落とさない（macOS 開発機のみ・Windows 実機では不要）。**
+`.pyc` の置き場所は走らせる python 次第で、`sys.pycache_prefix` が未設定ならリポジトリ内の
+`__pycache__/`、設定されていればその配下に置かれる。**同じバイト長の書き換えを同一秒内に
 行うとキャッシュの無効化条件をすり抜け、古いバイトコードのまま走る。**
+
+**置き場所を決め打ちにしないこと。** `.venv` を作り直すと土台の python が替わり、消し先も
+替わる。決め打ちの `rm -rf` は**存在しないパスを消して黙って成功する**ので、「消したつもり」で
+偽の緑を踏み直す（実際に、Apple の python 前提で書かれていた手順が土台の入れ替えで
+空振りになっていた。#114）。
 
 これは**このスキルが防ぐべき失敗そのもの**で、実際に踏んでいる。壊した `app.py` に対して
 `pytest` が `202 passed` と報告した（正しくは 4 件 FAIL）。手で書くぶんには長さがまず変わるので
 踏まないが、**`sed` で同じ長さの識別子を入れ替えたときと、「わざと壊して FAIL することを
 確かめる」検証では当たる**。後者はこのリポジトリで実際にやる作業なので、毎回消してから回す。
 
-`find . -name __pycache__ -delete` も、途中からの `python -B` も**効かない**
+`find . -name __pycache__ -delete`（空でないディレクトリを消せない）も、途中からの
+`python -B` も**効かない**
 （詳細と実測は `CONTRIBUTING.md` §2「macOS: 古いバイトコードで pytest が偽の緑を出す」）。
 
 **`--strict` を必ず付ける。** 付けないと、Edge も Chrome も無い環境で smoke が `SKIP`（終了コード 0）を返し、
