@@ -4,9 +4,9 @@
 // このファイル全体が「設定オブジェクト C を 1 個受け取る関数式」である。badge.py が読み込み、
 // `(<このファイル>)(<設定 JSON>);` の形で呼び出す完成スクリプトを組み立てて add_init_script に
 // 渡す。実ファイルなのでエディタ/リンタで構文検査できる。
-// 以前は設定の目印（ドル記号付きの識別子）を Python 側が単純置換していたため、このファイルでは
-// テンプレートリテラルの `${...}` 補間が使えなかった（その目印と衝突しうるため）。
-// 引数で受け取る形にして、その制約を無くしてある（#99）。**末尾はセミコロン無しの `}` で
+// 設定は引数で受け取る。**目印の文字列を Python 側が単純置換する形へ戻さないこと** —
+// その目印と衝突しうるため、このファイルでテンプレートリテラルの `${...}` 補間が使えなくなる。
+// **末尾はセミコロン無しの `}` で
 // 終える**こと（badge.py が `(…)(…);` で包むため、ここに `;` があると構文エラーになる）。
 //
 // バーは Shadow DOM の中に作る。サイト側 CSS はシャドウ境界を越えて中の要素に当たらない
@@ -30,7 +30,7 @@
 //   - window[NS].bodyText()                              : バー除外の本文 innerText
 //   - window[NS].signature(selector)                    : コンテンツ署名（スモークテスト用）
 //   ページ→Python は expose_binding。**その名前はこの JS には書かれておらず、設定 C の bind
-//   （badge.py の BIND_* が唯一の出所）から受け取る**（#100）。呼び出しは常に
+//   （badge.py の BIND_* が唯一の出所）から受け取る**。呼び出しは常に
 //   callBinding(C.bind.<キー>, tok, …) の形で、参照は BOUND へ退避後に window から消す:
 //   - C.bind.getState(tok)        : 描画前に現在状態を取得（枚数 count も含む）
 //   - SPA検知はページ側がイベント駆動で行い、落ち着いた変化を検知したら
@@ -74,8 +74,8 @@
   //     window へ差し込むため、掃除せず callBinding の実行時フォールバックに任せる。
   //
   //     名前そのものは Python から配られる（C.bind。出所は badge.py の BIND_* 1 箇所）。
-  //     以前はこの JS 側にも同じ名前のリテラルが並んでいて、片方だけ変えると無言失敗した
-  //     （#100・CONTRIBUTING §1-5）。**ここに名前を書き戻さないこと。**
+  //     **ここに名前を書き戻さないこと**（二重管理になり、片方だけ変えると無言失敗する。
+  //     CONTRIBUTING §1-5）。
   const BINDING_NAMES = Object.values(C.bind);
   const BOUND = {};
   BINDING_NAMES.forEach((n) => {
@@ -106,7 +106,7 @@
   // 退避できていなければ実行時の window を見る（スモークテストのように、バインディングを
   // 公開せず後から差し込む場面のため）。実運用では expose_binding が add_init_script より
   // 先に登録されるので、常に退避済みの本物が使われる。
-  // 失敗は握り潰す（未注入・呼び出し不能でもページ操作を壊さない。従来の try/catch と同じ方針）。
+  // 失敗は握り潰す（未注入・呼び出し不能でもページ操作を壊さない）。
   function callBinding(name) {
     const fn = BOUND[name] || window[name];
     if (typeof fn !== 'function') return undefined;
@@ -119,8 +119,7 @@
 
   // --- 撮影演出のタイミング定数（ミリ秒）。ここだけ直せば挙動を調整できる。 ---
   // 対になる CSS 側の時間は、下の <style>（テンプレートリテラル）へ ${...} で差し込む。
-  // かつては設定の目印の単純置換と衝突するため差し込めず、CSS 値と手動で整合を取っていたが、
-  // 設定を引数で受け取る形にして補間が使えるようになった（#99）。**JS の定数が唯一の出所。**
+  // **JS の定数が唯一の出所。** CSS 側へ数値を手で書き写さないこと。
   const BAR_MOVE_MS = 240;      // バーの退避/復帰アニメーション（CSS: .bar の transition）
   const FLASH_MS = 500;         // シャッターフラッシュのアニメーション長（CSS: .frame.flash）
   const CAP_FALLBACK_MS = BAR_MOVE_MS + 260;  // = 500ms。captureStart: transitionend が来ない場合の保険（退避 240ms を十分に超える上限）
@@ -141,8 +140,8 @@
 
   // --- SPA検知（中身変化のイベント駆動監視） ---
   // 変化は MutationObserver で捉え、SPA_SETTLE_MS のデバウンスで「落ち着いてから」署名を
-  // 確定し、前回と違えば Python へ通知する（C.bind.spaChanged）。従来の「Python が毎tick
-  // 署名を評価するポーリング」を廃し、変化があったときだけ計算するので負荷が下がる。
+  // 確定し、前回と違えば Python へ通知する（C.bind.spaChanged）。**Python から毎tick 署名を
+  // 評価するポーリングにしないこと** — 変化があったときだけ計算するので負荷が下がる。
   const SPA_SETTLE_MS = (C.settleMs > 0) ? C.settleMs : 300;   // 変化が止まってから確定するまで
   const SPA_MAX_WAIT_MS = Math.max(SPA_SETTLE_MS * 5, 3000);   // 変化が続く場合でも確定する上限
   let spaLastSig = '';         // 最後に基準/通知した署名
@@ -264,8 +263,7 @@
   // 空白のみのテキストノードとして無視されるため、表示には影響しない。文言は
   // 後から textContent/属性で入れる（HTML への直接埋め込みを避ける）。
   // セレクタ候補の datalist の id はシャドウ内で閉じているのでページ側とは衝突しない
-  // （かつて __eac_ 接頭辞を付けていたが、バインディング名の一元化・#100 に合わせて
-  //  この JS から __eac_ で始まる文字列リテラルを無くした。id 自体はどう名付けても等価）。
+  // （この JS には __eac_ で始まる文字列リテラルを置かない。id 自体はどう名付けても等価）。
   const MARKUP = `
     <div class="wrap"><div class="bar idle" data-eac="bar">
       <span class="status"><span class="dot idle" data-eac="dot"></span><span class="label" data-eac="label"></span></span>
@@ -444,7 +442,7 @@
   //（シャッター確定の合図）、少し遅らせてからバーを元位置へスライドで戻す。フラッシュと
   // 復帰の動きを時間差にすることで、隠すときと同じ「上から降りてくる」動きが単独で見える。
   // 撮影が重なっていれば最後の1つで戻す。ok は _capture の done 有無で、成功は赤・失敗は
-  // 琥珀にフラッシュ色を分ける（成否を渡さない無引数呼び出しは従来どおり成功＝赤）。
+  // 琥珀にフラッシュ色を分ける（成否を渡さない無引数呼び出しは成功＝赤）。
   function captureEnd(ok) {
     if (!els || !els.bar) return;
     if (capDepth > 0) capDepth--;
@@ -493,7 +491,7 @@
       // closed にして、サイト側スクリプトから host.shadowRoot 経由で中へ入れないようにする。
       // open だと document.getElementById(ID).shadowRoot.querySelector(...).click() だけで
       // 記録の開始/停止・連写・セレクタ書き換えを起こせてしまい、token 照合が迂回される。
-      // 内部からは以下の shadow 変数で従来どおり操作できる（closed でも参照は返る）。
+      // 内部からは以下の shadow 変数で操作できる（closed でも参照は返る）。
       shadow = host.attachShadow({ mode: 'closed' });
       shadow.innerHTML = TEMPLATE;
 
@@ -529,7 +527,7 @@
 
       // 操作はすべて expose_binding 経由で Python へ通知する。第1引数に合言葉 TOK を付ける。
       // 呼び出しは callBinding に通す（退避済みの本物を使い、TOK をサイト側へ渡さない）。
-      // 名前は Python から配られた C.bind を使う（この JS に名前のリテラルは置かない・#100）。
+      // 名前は Python から配られた C.bind を使う（この JS に名前のリテラルは置かない）。
       els.toggle.addEventListener('click', () => callBinding(C.bind.toggle, TOK));
       els.shot.addEventListener('click', () => callBinding(C.bind.shot, TOK));
       // 保存先フォルダを開く。Python 側が OS のファイルマネージャで開く（ローカル操作）。
@@ -735,17 +733,17 @@
   } else {
     build();
   }
-  // 以前はここで 2 つの MutationObserver（バー再構築・SPA検知）を documentElement に
-  // subtree で常時張っていたが、閲覧しているだけの利用者にも恒常的な負荷がかかっていた。
+  // **MutationObserver を documentElement に subtree で常時張らないこと** — 閲覧している
+  // だけの利用者にも恒常的な負荷がかかる。必要な範囲でだけ張る:
   //   - バー再構築 → build 内 ensureBarObserver（body の childList のみ・body 確定後に張る）
   //   - SPA検知   → spaSyncBaseline 内 spaObserverConnect/Disconnect（監視中のときだけ接続）
-  // へ移した。SPA検知の署名は body 側の変化で決まるので、documentElement 常時監視は不要。
+  // SPA検知の署名は body 側の変化で決まるので、documentElement 常時監視は不要。
   //
   // ルート変化（SPA の画面遷移）のフック。pushState / replaceState を包み、popstate /
   // hashchange も拾う。いずれも onRoute（基準取り直し）へ回す。
-  // 以前は毎回無条件にラップしていたため、(1) 元へ戻せない (2) 同一ドキュメントに
-  // 複数回注入されると多重ラップになる、という後始末漏れがあった。原参照を包み側に保持し、
-  // 既にこのバーが包んだものは包み直さないガードを入れる（ラップは 1 回だけ）。
+  // **毎回無条件にラップしないこと** — (1) 元へ戻せない (2) 同一ドキュメントに複数回
+  // 注入されると多重ラップになる。原参照を包み側に保持し、既にこのバーが包んだものは
+  // 包み直さないガードを入れる（ラップは 1 回だけ）。
   const hookHistory = (name) => {
     const orig = history[name];
     if (typeof orig !== 'function' || orig.__eacOrig) return;   // 既に包み済みなら何もしない
