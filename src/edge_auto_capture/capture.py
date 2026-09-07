@@ -237,83 +237,63 @@ class CaptureRunner:
         委ねる。「保存物 1 種＝メソッド 1 本」の粒度に分けてあるのは、ここへ保存物を
         足すため（索引 CSV の _append_index も同じ粒度）。
 
-        各 _save_* へは req をそのまま渡し、page / url / config / selector はあちら側が
-        req から取る（引数へ並べると隣接する同型（str）の stem と url を取り違えても
-        型検査で止まらず、保存物を 1 種足すたびに同じ行列がもう 1 本増える）。
-        追加で渡すのは、この撮影中に確定して req には載らない save_dir / stem / done だけ。
+        **各 _save_* へは req をそのまま渡すこと。** page / url / config / selector を引数へ
+        並べると、隣接する同型（str）の stem と url を取り違えても型検査で止まらず、
+        保存物を 1 種足すたびに同じ行列がもう 1 本増える。追加で渡してよいのは、この撮影中に
+        確定して req には載らない save_dir / stem / done だけ。
         """
-        # req.selector は「一部抜き出し(_part.txt)」の対象 CSS セレクタ。操作バーの入力欄で
-        # 実行時に変えられるため、config 固定値ではなく呼び出し時の値を使う
-        #（初期値は config.target_selector）。空なら _part.txt はスキップ。
-        # ファイル名は「日時（ミリ秒まで）_ページタイトル」。ミリ秒付き日時で一意性と
-        # 時系列順を保証し、末尾のタイトルは人がページを見分けるための情報。
-        # ts は await より前に確定させる。タイトルはページ読み込み後に確定させる。
-        # ローカルへ展開するのは多用する page / url だけに留め、他は req.* のまま参照する
-        # （CaptureRequest にフィールドを足したときに触る行を増やさないため）。
+        # **ts と captured_at は await より前に確定させる。** どちらも「撮影を始めた時刻」で、
+        # 後から遡って直せない。ローカルへ展開するのは多用する page / url だけに留め、他は
+        # req.* のまま参照する（CaptureRequest にフィールドを足したときに触る行を増やさない）。
         page = req.page
         url = req.url
         ts = now_stamp()                                     # 例: 2026-08-11_14-30-25-123
-        # 索引 CSV 用の撮影時刻。ファイル名（ts）とは別に、オフセット付き ISO で撮影開始時刻を
-        # 押さえる。後から遡って直せない情報なので、await より前のこの時点で確定させる。
         captured_at = iso_timestamp()                        # 例: 2026-08-11T14:30:25.123+09:00
 
         # 読み込み完了を待つ（タイムアウトしても続行）
         with _step("load", url):
             await page.wait_for_load_state("load", timeout=req.config.load_timeout)
-        # 描画が落ち着くまで待つ（settle_delay）。ただし SPA 経由は、ページ側 badge.js が
-        # SPA_SETTLE_MS のデバウンスで既に「変化が止まってから」通知している。ここで再び
-        # settle_delay を待つと二重待ちになり体感が遅れるだけなので省く。
+        # **SPA 経由ではここで待たない。** ページ側（badge.js）が SPA_SETTLE_MS のデバウンスで
+        # 既に「変化が止まってから」通知しているので、二重待ちになって体感が遅れるだけ。
         # URL遷移/手動は load 直後にまだ描画が動きうるので待つ。
         if req.trigger != "spa":
             await asyncio.sleep(req.config.settle_delay)
 
-        # タイトルを取得してファイル名の識別名を確定（失敗しても URL 由来の名前で代替）。
         title = ""
         with _step("title", url):
             title = await page.title()
         stem = f"{ts}_{page_label(title, url)}"              # 3ファイルで同じ接頭辞を共有
 
-        # 保存先は系譜（lineage）ごとのサブフォルダ（output_dir/lineage-<id>）。未採番なら直下。
-        # 3ファイルとも同じフォルダへ。フォルダが無ければ作る（失敗しても各 _step が握って skip）。
+        # 保存先は系譜ごとのサブフォルダ（output_dir/lineage-<id>）。未採番なら直下。
         save_dir = group_subdir(req.config.output_dir, req.group_id)
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        # 実際に保存できたステップの記録。png / txt / part だけを積み、
-        # 全滅時に [saved] と嘘のログを残さないための判定材料にする。
-        # done は各 _save_* へ渡し、成功したステップだけが自分の tag を積む。
+        # 実際に保存できたステップ（png / txt / part）。全滅時に [saved] と嘘を残さないための判定材料。
         done: list[str] = []
 
-        # 撮影の合図つきで 3 種を保存する。バーを退避し切ってからスクショを撮り（画像に写し込ま
-        # ない）、全種の保存後に成否（done 有無）に応じた色でシャッターフラッシュ＋バー復帰。
-        # 退避は png のためだが、txt/txt(part) は本文取得側でバーを除外するので退避したままでも
-        # 支障はなく、フラッシュ色を _capture 全体の成否に一致させるため復帰は最後にまとめて行う。
-        # captureEnd は失敗時も戻すため finally で必ず呼ぶ（フラッシュ色は done 有無で決める）。
+        # 撮影の合図つきで 3 種を保存する。バーを退避し切ってからスクショを撮る（画像に写し込まない）。
+        # 復帰は 3 種の保存後にまとめて行う（シャッターフラッシュの色を _capture 全体の成否に
+        # 合わせるため）。**captureEnd は finally で呼ぶこと** — 失敗時にバーが退避したまま残る。
         eval_timeout = req.config.eval_timeout_sec               # ミリ秒 → 秒の換算は Config 側
         await try_eval(page, badge.capture_start_call(self.ns), eval_timeout)
         try:
-            # 1) フルページ スクリーンショット
             await self._save_screenshot(req, save_dir, stem, done)
-            # 2) ページ全文テキスト
             await self._save_text(req, save_dir, stem, done)
-            # 3) 一部抜き出し（セレクタ設定時のみ）
             if req.selector:
                 await self._save_part(req, save_dir, stem, done)
         finally:
             await try_eval(page, badge.capture_end_call(self.ns, bool(done)), eval_timeout)
 
-        # 1つでも保存できたら [saved]（何を保存したか併記）。全滅なら正直に「保存できず」。
-        # group_id が採番済みなら、どの系譜（lineage）の保存かも併記する（＝保存先フォルダ名）。
+        # 1つでも保存できたら [saved]、全滅なら正直に「保存できず」。採番済みなら系譜も併記する。
         who = f"{group_folder_name(req.group_id)} " if req.group_id else ""
         if done:
             log(f"[saved] {who}{stem}.*  ({','.join(done)})  <- {url}")
         else:
             log(f"[保存できず] {who}{stem}  <- {url}")
 
-        # 撮影ごとに索引 CSV へ 1 行追記。成否は done（実際に保存できたステップ）で決める。
         self._append_index(req, captured_at, title, stem, done)
 
-        # 撮影 1 回分の成否を監視セッションへ通知する（撮影カウンタ／失敗の把握に使う）。
-        # 通知先が未設定（単体テスト等）や通知自体が失敗しても、撮影本体は成立しているので握る。
+        # 撮影カウンタ用の通知。通知先が未設定でも通知が失敗しても、撮影本体は成立しているので握る。
         if self.on_result is not None:
             try:
                 await self.on_result(bool(done))
