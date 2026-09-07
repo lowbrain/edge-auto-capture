@@ -151,6 +151,9 @@ pip install -e .
 python -m edge_auto_capture
 ```
 
+**`playwright install` は不要**（実行する必要が無い）。インストール済みの Edge / Chrome を
+`channel` 指定でそのまま使うので、Playwright が同梱ブラウザをダウンロードする手順は要らない。
+
 `src/` レイアウト化（#81）により `python edge_auto_capture.py` は使えなくなった。
 `pip install -e .` 済みなら `edge-auto-capture` コマンドでも同じものが起動する。
 
