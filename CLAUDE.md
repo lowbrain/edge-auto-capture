@@ -17,7 +17,8 @@ Claude Code 向けの**導線**。ここは内容の出所ではない。
 | 検証手順 | [`CONTRIBUTING.md`](CONTRIBUTING.md) §3「検証手順（4 点セット）」／スキル `/verify` |
 | コミット・報告の慣習 | [`CONTRIBUTING.md`](CONTRIBUTING.md) §4「コミット・報告の慣習」 |
 | 課題タグ（`A-` / `B-` / `D-` / `E-` / `F-` / `R`）— 退役済み。git 履歴を読むときだけ要る | [`CONTRIBUTING.md`](CONTRIBUTING.md) 冒頭「退役語彙」 |
-| 仕組み・設定・ビルド・配布 | [`README.md`](README.md) |
+| 仕組み・設定・テスト | [`README.md`](README.md) |
+| 配布用 exe のビルド・署名・配布・IT への許可依頼 | [`BUILD.md`](BUILD.md) |
 | 利用者向けの使い方（Shift-JIS） | [`USAGE.txt`](USAGE.txt) |
 | **残タスクと現在地・個々のタグの状態** | Issue [#78](https://github.com/lowbrain/edge-auto-capture/issues/78)（ピン留め・これが正） |
 | 過去の完了作業の実装内容 | git 履歴 |

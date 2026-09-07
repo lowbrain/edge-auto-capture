@@ -138,7 +138,7 @@ def _rel(path: Path) -> str:
 def test_scan_actually_finds_the_documents():
     # 走査条件を絞りすぎて「0 件だから緑」になっていないことの担保。
     names = {_rel(p) for p in _files()}
-    assert {"README.md", "CONTRIBUTING.md", "CLAUDE.md"} <= names
+    assert {"README.md", "BUILD.md", "CONTRIBUTING.md", "CLAUDE.md"} <= names
 
 
 def test_all_github_urls_use_the_canonical_slug():

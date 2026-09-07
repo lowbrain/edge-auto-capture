@@ -3,7 +3,8 @@
 「知らないと壊す仕掛け・作業環境・検証手順」に絞った恒久メモ。**変更前に §1 を読むこと。**
 
 - **これから作る / 直すもの（残タスクと優先順）は Issue [#78](https://github.com/lowbrain/edge-auto-capture/issues/78)（ピン留め）が正。**
-- ツールの仕組み・設定リファレンス・ビルド・配布は [`README.md`](README.md)。
+- ツールの仕組み・設定リファレンス・テストは [`README.md`](README.md)。
+- 配布用 exe のビルド・署名・配布は [`BUILD.md`](BUILD.md)。
 - 過去の完了作業の実装内容は git 履歴を参照。
 
 ## 課題タグ（`A-` / `B-` / `D-` / `E-` / `F-` / `R`）— 退役語彙
@@ -258,7 +259,7 @@ CI（GitHub Actions）でも同じ 4 点が回る（[`.github/workflows/ci.yml`]
   例: `修正: ダウンロードの保存先を output 配下へ明示する（#59）`
   末尾の括弧には対象の Issue 番号を書く（課題タグは退役済み。冒頭の「退役語彙」）。
 - **push / タグ付けは利用者に確認**してから。
-- ドキュメント（`README.md` / `CONTRIBUTING.md` / `USAGE.txt`）を直したら、その旨を報告に含める。
+- ドキュメント（`README.md` / `BUILD.md` / `CONTRIBUTING.md` / `USAGE.txt`）を直したら、その旨を報告に含める。
 - **未検証の項目は必ず「未検証」と明記する。** 憶測で「動作を確認しました」と書かない。
 - 残タスクの状態は Issue 側が正。**ドキュメントに残タスクの一覧を作らない**
   （二重管理になり、実際に食い違いが起きた。経緯は [#38](https://github.com/lowbrain/edge-auto-capture/issues/38) 冒頭）。
