@@ -4,11 +4,17 @@ config.ini のパース・既定値へのフォールバック・自己修復・
 セッションフォルダ・撮影対象 URL の判定（should_capture）を守る。
 実 Edge 不要（config は infra だけに依存し Playwright を import しない）。
 
+末尾に「設定キーの出所の一致」を縛る一群がある（#115）。こちらは他と毛色が違い、
+tests/test_docs_refs.py や test_packaging.py と同じ「漏れても 4 点セットのどれも
+落ちないが、後で効いてくる」型の不変条件。
+
 実行:
     pip install -e ".[dev]"
     pytest
 """
 
+import ast
+import configparser
 import re
 from pathlib import Path
 
@@ -21,6 +27,8 @@ from edge_auto_capture.config import Config, ConfigFatalError, load_config, shou
 # session_stamp の実装本体への参照（conftest の autouse フィクスチャが "" へ差し替える前に押さえる）。
 # 差し替え後も本物の書式を検証できるようにするため。
 _REAL_SESSION_STAMP = config_mod.session_stamp
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 # --------------------------------------------------------------------------- #
@@ -553,3 +561,93 @@ def test_summarize_config_marks_empty_values_readably():
     assert "hide_selectors=(無)" in line
     assert "allow_urls=(無)" in line
 
+
+
+# --------------------------------------------------------------------------- #
+# 設定キーの出所の一致（#115）
+# --------------------------------------------------------------------------- #
+# config.ini のキーは 3 箇所に載っている:
+#   1. default_config.ini（配布・自己修復に使う既定テンプレート。package-data）
+#   2. config.py の _build_config（実際に読むキー）
+#   3. README.md §設定（config.ini）の表（開発者向けリファレンス）
+# キーを 1 つ足して README に書き忘れても、あるいは README から消し忘れても、
+# pytest / ruff / mypy / smoke はどれも緑のまま通る。test_docs_refs.py の
+# 「*.py 参照」「Issue 番号」「節番号」と同じ型の不変条件で、番人がいなかった最後の 1 つ。
+#
+# **キーの一覧をここへ書き写さないこと**（番人自身が 4 つ目の出所になる）。
+# 3 つとも出所から機械的に導出して突き合わせる。
+
+# sec.get / getfloat / getint / getboolean の第1引数と、_csv_tuple(sec, "...") の第2引数。
+_SECTION_READERS = {"get", "getfloat", "getint", "getboolean"}
+
+
+def _keys_read_by_config_py() -> set[str]:
+    """config.py のソースから「[capture] から読んでいるキー」を導出する。
+
+    リテラルで書かれた読み出しだけを拾う。`_csv_tuple` 内部の `sec.get(key, "")` は
+    キーが変数なので自然に外れる（拾ってしまうと偽のキーが混ざる）。
+    """
+    tree = ast.parse((ROOT / "src" / "edge_auto_capture" / "config.py").read_text(encoding="utf-8"))
+    keys: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        func = node.func
+        # sec.get("key", ...) の形
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr in _SECTION_READERS
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "sec"
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            keys.add(node.args[0].value)
+        # _csv_tuple(sec, "key") の形
+        elif (
+            isinstance(func, ast.Name)
+            and func.id == "_csv_tuple"
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+        ):
+            keys.add(node.args[1].value)
+    return keys
+
+
+def _keys_in_default_template() -> set[str]:
+    """同梱テンプレート（default_config.ini）の [capture] のキー。"""
+    parser = configparser.ConfigParser()
+    parser.read_string(config_mod._default_config_text())
+    return set(parser["capture"].keys())
+
+
+def _keys_in_readme_table() -> set[str]:
+    """README の「設定（config.ini）」の表に並んでいるキー。
+
+    表は `| \\`key\\` | 意味 |` の形。見出しから次の見出しまでを対象にする。
+    """
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    m = re.search(r"^### 設定（config\.ini）$(.*?)^#{2,3} ", text, re.S | re.M)
+    assert m, "README の「設定（config.ini）」節が見つからない（見出しを変えたなら追随する）"
+    return set(re.findall(r"^\| `([a-z_]+)` \|", m.group(1), re.M))
+
+
+def test_config_keys_agree_across_their_three_sources():
+    read = _keys_read_by_config_py()
+    template = _keys_in_default_template()
+    readme = _keys_in_readme_table()
+
+    # 走査条件を絞りすぎて「0 件だから緑」になっていないことの担保。
+    assert len(read) >= 10, f"config.py から読み出しキーを導出できていない: {sorted(read)}"
+
+    assert read == template, (
+        "config.py が読むキーと default_config.ini の [capture] が食い違っている:"
+        f" config.py にだけ={sorted(read - template)} /"
+        f" テンプレートにだけ={sorted(template - read)}"
+    )
+    assert read == readme, (
+        "config.py が読むキーと README の設定表が食い違っている:"
+        f" config.py にだけ={sorted(read - readme)} /"
+        f" README にだけ={sorted(readme - read)}"
+    )
