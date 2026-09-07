@@ -10,9 +10,8 @@
 - capture 側が page.evaluate で呼ぶヘルパ（バー隠し/本文取得/保存フラッシュ）の
   呼び出し式もここに集約する。
 - sig_call（ページ側 signature の呼び出し式）だけは本番経路では使わない。SPA検知の署名
-  計算はページ側（badge.js の MutationObserver + デバウンス）へ移り、Python が
-  毎tick 署名を評価するポーリングは廃止された。その名残で、いまは tests/smoke_badge.py が
-  ページ側ヘルパの疎通確認に使うだけ（詳細は sig_call の docstring）。
+  計算はページ側（badge.js の MutationObserver + デバウンス）が行う。sig_call の
+  呼び出し元は tests/smoke_badge.py だけ（詳細は sig_call の docstring）。
 """
 
 import json
@@ -106,7 +105,7 @@ def _badge_js_path() -> Path:
     --add-data で badge.js を _MEIPASS 直下へ同梱する前提。
 
     frozen 判定そのものは infra.package_data_path が持つ（config.py の
-    default_config.ini も同じ解決をするので、二重に書かない・#101）。
+    default_config.ini も同じ解決をするので、二重に書かない）。
     """
     return package_data_path("badge.js")
 
@@ -114,10 +113,10 @@ def _badge_js_path() -> Path:
 def new_namespace() -> str:
     """このセッションのページ側ヘルパ（Python→ページ）を収める window プロパティ名を返す。
 
-    以前は `window.__eacApplyState` 等の固定名でページ側へ公開していたため、閲覧中サイトが
-    `'__eacApplyState' in window` のようにしてツールの存在を検知できた。起動ごとにランダムな
-    名前を生成し、その 1 プロパティ（非列挙）へヘルパをまとめることで、固定名での存在検知を
-    できなくする。Python 側は生成した名前を知っているので `window[<name>].applyState(...)` の
+    **`window.__eacApplyState` のような固定名で公開しないこと。** 閲覧中サイトが
+    `'__eacApplyState' in window` のようにしてツールの存在を検知できてしまう。起動ごとに
+    ランダムな名前を生成し、その 1 プロパティ（非列挙）へヘルパをまとめることで、固定名での
+    存在検知をできなくする。Python 側は生成した名前を知っているので `window[<name>].applyState(...)` の
     形で呼べる（下の *_call が名前込みで呼び出し式を組み立てる）。token と同様、起動ごとに
     使い捨てる。先頭を英字にして数値インデックス的な扱いを避ける。
     """
@@ -151,14 +150,14 @@ def build_badge_script(
     まとめる。固定名を window に生やさないので、サイトから固定名で存在検知できなくなる。
     空（既定）のときは公開しない（見た目だけ確認するテスト用ビルドで、ヘルパを呼ばない場面）。
 
-    バインディング名（__eac_* 群）も設定の bind キーに載せて配る（#100）。badge.js 側は
+    バインディング名（__eac_* 群）も設定の bind キーに載せて配る。badge.js 側は
     その値を使うだけで、JS には名前のリテラルが無い。**名前の出所は下の BIND_* 1 箇所。**
 
-    渡し方は「badge.js 全体を 1 個の関数式として呼び出す」形（#99）。以前は badge.js 中の
-    目印 "$CONFIG" を単純置換していたが、そのせいで badge.js ではテンプレートリテラルの
-    `${...}` 補間が使えなかった（`$CONFIG` と衝突しうるため）。引数で渡す形にすると、
-    設定は JS の値として素直に入り、この制約も消える。固定名を globalThis に載せないので
-    存在検知の防止（CONTRIBUTING §1-6）とも噛み合う。日本語/絵文字は json.dumps が
+    渡し方は「badge.js 全体を 1 個の関数式として呼び出す」形。**目印の文字列を単純置換する
+    形へ戻さないこと** — 置換の目印と衝突するせいで badge.js 側でテンプレートリテラルの
+    `${...}` 補間が使えなくなる。引数で渡せば設定は JS の値として素直に入り、固定名を
+    globalThis に載せないので存在検知の防止（CONTRIBUTING §1-6）とも噛み合う。
+    日本語/絵文字は json.dumps が
     \\uXXXX に安全化する。badge.js の末尾は `}`（セミコロン無し）である前提。
     """
     config = dict(
@@ -181,11 +180,11 @@ def build_badge_script(
 # 呼ぶ（＝遅延化）。これで import 時 I/O を無くした。
 
 # --- expose_binding で公開するバインディング名（ページ側 → Python の呼び出し口）---
-# **名前の出所はここだけ**（#100）。以前は badge.js 側にも同じ 8 個の文字列リテラルが
-# 並んでいて、片方だけ変えると無言失敗した（callBinding が BOUND から引けず undefined を
-# 返して終わり。例外もログも出ず、ボタンだけが効かなくなる）。いまは下の _BIND_NAMES に
-# 載せて設定 JSON の bind キーで JS へ配るので、JS 側に名前は無く、片側漏れが構造的に
-# 起こらない。名前を増やすときは (1) ここに BIND_* を足し (2) _BIND_NAMES に載せ
+# **名前の出所はここだけ。** 下の _BIND_NAMES に載せて設定 JSON の bind キーで JS へ配る
+# ので、JS 側に名前は無く、片側漏れが構造的に起こらない。**badge.js 側へ同じ文字列
+# リテラルを書き戻さないこと** — 片方だけ変えると無言失敗する（callBinding が BOUND から
+# 引けず undefined を返して終わり。例外もログも出ず、ボタンだけが効かなくなる）。
+# 名前を増やすときは (1) ここに BIND_* を足し (2) _BIND_NAMES に載せ
 # (3) app.py で expose_binding し (4) badge.js で C.bind.<キー> を呼ぶ。
 BIND_TOGGLE = "__eac_toggle"                  # 記録開始/停止
 BIND_SHOT = "__eac_shot"                       # 今すぐ1枚
@@ -232,9 +231,9 @@ def _ns_call(ns: str, method: str, *args: str) -> str:
 
     戻り値を使わない一方向の通知（applyState / captureEnd / setCount / setHistory）は
     すべてこの形。ns 自体が未公開（未注入・ns 空）でも、そのメソッドがまだ生えていなくても
-    落ちないよう `ref && ref.M && ref.M(...)` と二段でガードする。以前は各関数が同じ式を
-    手書きしており、applyState だけメソッド側のガードが抜けていた（try_eval が握るので
-    表には出ないが、同型の関数で形が違うと事故のもとになる）。
+    落ちないよう `ref && ref.M && ref.M(...)` と二段でガードする。**各関数が同じ式を
+    手書きしないこと** — 同型の関数で形が違うとガードの抜けに気づけない（try_eval が
+    握るので表にも出ない）。
 
     args は JS の式として組み立て済みの文字列を渡す（真偽値なら "true"/"false"、
     文字列・配列なら json.dumps 済みのリテラル）。
@@ -261,8 +260,8 @@ def sig_call(ns: str) -> str:
     """SPA検知の署名。引数 sel を受け取る関数式（page.evaluate(sig_call(ns), selector) で使う）。
 
     **本番経路では未使用。** SPA検知の署名計算はページ側（badge.js の
-    MutationObserver + デバウンス）へ移り、Python が毎tick 署名を評価するポーリングは
-    廃止された。これはその名残で、現在の呼び出し元は tests/smoke_badge.py の 1 箇所だけ
+    MutationObserver + デバウンス）が行うので、Python から毎tick 署名を評価しない。
+    呼び出し元は tests/smoke_badge.py の 1 箇所だけ
     （window[ns] 越しに signature が呼べるかというページ側ヘルパの疎通確認）。
 
     未使用に見えても消さないこと。消すとスモークテストが壊れるうえ、ページ側ヘルパが

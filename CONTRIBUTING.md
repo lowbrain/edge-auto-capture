@@ -83,15 +83,12 @@
    例外もログも出ず、ボタンだけが効かなくなる）ので、(1)〜(3) の食い違いは
    `tests/test_badge.py` が、実際の発火は `tests/smoke_badge.py` が見る。
 
-   > **§1-6 の呼び出し例について**: 同節に `callBinding('__eac_toggle', TOK, ...)` と
-   > 名前を直に書いた例が残っているが、いまの正しい形は `callBinding(C.bind.toggle, TOK, ...)`。
-   > 「`callBinding` 経由で呼ぶ」という §1-6 の趣旨は変わらない。
-
 6. **`badge.js` のシャドウは `closed`・呼び出しは `callBinding` 経由**。
    - `host.shadowRoot` は `null` を返す。中を触るテストは
      `window.__eac_debugRoot()`（token 無しビルドでのみ公開）を使う
    - `window.__eac_toggle(...)` のような**直接呼び出しを新たに書かないこと**。
-     必ず `callBinding('__eac_toggle', TOK, ...)` を使う（サイト側が差し替えた関数へ token を渡さないため）
+     必ず `callBinding(C.bind.toggle, TOK, ...)` を使う（サイト側が差し替えた関数へ token を
+     渡さないため）。名前は直に書かず `C.bind` から取る（§1-5）
    - `mode: 'open'` に戻すとスモークテストが失敗する（回帰チェックを入れてある）
    - **固定名を `window` に生やさない**（サイト側からの存在検知の防止）:
      - Python→ページのヘルパは固定名（`window.__eacApplyState` 等）ではなく、起動ごとの

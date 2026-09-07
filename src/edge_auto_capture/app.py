@@ -22,10 +22,8 @@ Edge の起動・監視・後始末はこのスクリプトが一括で行う（
 
 本ファイルの役割は、入口（cli / main）と監視セッション（CaptureSession）。
 **モジュール構成の一覧は README.md の「構成」が正で、ここへは書き写さない。**
-以前はここにも全モジュールの一覧を置いていたが、#81 の `src/` レイアウト化のときに
-README だけが追随し、この docstring は自分自身を旧いモジュール名で呼び続けたうえ、
-`起動方法` として動かないコマンドを指示し続けた（`ls` で分かる一覧を二重に持たない、
-という #78 の運用ルールの実例）。取り残しは tests/test_docs_refs.py が落とす。
+`ls` で分かる一覧を二重に持つと、片方だけが実態に追随して嘘になる。
+取り残しは tests/test_docs_refs.py が落とす。
 
 事前準備:
   pip install -e .          （または pip install playwright）
@@ -37,7 +35,7 @@ README だけが追随し、この docstring は自分自身を旧いモジュ�
   - ビルドした edge-auto-capture.exe をダブルクリック（配布時）
   設定は config.ini で変更する（起動ページ start_url、保存先など。start_url が空なら
   about:blank）。config.ini と output\\ の置き場所は、通常実行なら**実行時のカレント
-  ディレクトリ**、exe 実行なら exe と同じフォルダ（infra._base_dir。#81）。
+  ディレクトリ**、exe 実行なら exe と同じフォルダ（infra._base_dir）。
   開いた Edge で普通に閲覧すれば、記録ONの間だけ URL/タブの変化ごとに自動保存される。
 
 停止は「Edge のウィンドウを閉じる」だけでよい（コンソール実行時は Ctrl + C も使える）。
@@ -109,7 +107,7 @@ def _page_url(page: Page) -> str | None:
 
     取れなかったときにどうするかは呼び出し側ごとに違う（撮らずに抜ける／ログの補足を
     諦めて空文字で続ける）が、**例外を握って None にするところまでは共通**なので
-    ここへ寄せる。以前は同じ try/except が 3 箇所へ手書きされていた。
+    ここへ寄せる。
     """
     try:
         return page.url
@@ -126,8 +124,8 @@ class CaptureSession:
     """1 回の起動ぶんの監視セッション。
 
     タブ系譜（グループ）ごとの実行時状態（記録中/SPA検知/セレクタ）と、それを操作する各
-    コールバック・監視ループをまとめて持つ。以前は main() 内のネスト関数群だったものを
-    クラスへ集約し、状態の所在を明確にして main() を薄くする。
+    コールバック・監視ループをまとめて持つ。状態の所在をこのクラスへ集約し、
+    main() は薄く保つ。
 
     状態はセッション全体で共有せず、ページの opener 連鎖で決まるグループ単位に持つ
     （groups / page_root）。各ページの操作バーは自分の属するグループの状態を表示・操作し、
@@ -165,10 +163,10 @@ class CaptureSession:
         self.selector_history: list[str] = []
         # --- グループ単位の実行時状態 ---
         # 記録ON/OFF・SPA検知・セレクタは「タブ系譜（グループ）」ごとに独立して持つ。系譜の
-        # 状態（groups / page_root）と解決ロジックは lineage.LineageRegistry へ寄せてある（#36）。
+        # 状態（groups / page_root）と解決ロジックは lineage.LineageRegistry へ寄せてある。
         # 新規タブに与える既定セレクタは config.target_selector（レジストリが握って使う）。
         # 採番（resolve）・種入れ（seed_root）・後始末（release）は全てレジストリの API で行い、
-        # こちら側は下のプロパティで読み取り専用ビューだけを公開する（#48）。
+        # こちら側は下のプロパティで読み取り専用ビューだけを公開する。
         self._lineage = LineageRegistry(config.target_selector)
         # --- ページごとの追跡情報 ---
         self.seen: dict[Page, str] = {}           # page -> 直近のURL
@@ -176,10 +174,9 @@ class CaptureSession:
         self._tracked: set[Page] = set()
 
     # 系譜の状態はレジストリが own する。ここは参照（in 判定・取り出し・列挙）専用の窓で、
-    # 書き換えはレジストリの API（resolve / seed_root / release）に限る（#48）。
-    # 以前は内部辞書をそのまま返していたため _on_page_closed が外から直接書き換えていて、
-    # 「系譜の生存管理」だけが 2 モジュールに分かれていた。MappingProxyType で包むのは、
-    # うっかり `session.groups[k] = v` と書いたときに黙って通らずその場で落とすため。
+    # 書き換えはレジストリの API（resolve / seed_root / release）に限る。内部辞書を
+    # そのまま返さないこと（系譜の生存管理が 2 モジュールへ分かれる）。MappingProxyType で
+    # 包むのは、うっかり `session.groups[k] = v` と書いたときに黙って通らずその場で落とすため。
     @property
     def groups(self) -> Mapping[Page, GroupState]:
         return MappingProxyType(self._lineage.groups)
@@ -446,7 +443,7 @@ class CaptureSession:
         """発生元ページの系譜を解決し、保存の本体（downloads.save）へ委譲する。
 
         系譜解決はページ集合の状態（_resolve_group）を持つこちらの責務、保存先規約・
-        連番衝突回避・save_as の実行は downloads.py 側の責務（#59 でそちらへ切り出した）。
+        連番衝突回避・save_as の実行は downloads.py 側の責務。
         どの系譜かは発生元ページ（download.page）の所属グループで決める。
         token 照合は不要（ブラウザ本体が発火するイベントで、ページ側から詐称できない）。
         """
@@ -486,16 +483,16 @@ class CaptureSession:
         # バインディング名は badge.py の BIND_* に集約（badge.js 側の呼び出し名と一致）。
         # ページ側 → Python のバインディング名（badge.BIND_*）と、それを受けるメソッドの対応表。
         # 下の for はこれを回して expose_binding するだけなので、バインディングを増やすときに
-        # 触るのはこの表の 1 行だけになる（以前は setup() 内に 8 行が直書きで並んでいた）。
+        # 触るのはこの表の 1 行だけになる。
         # badge.py の BIND_*（＝badge.js の BINDING_NAMES）と 1:1 で揃っていること。1 行落とすと
         # ページ側は callBinding が BOUND から引けず undefined を返して終わり、例外もログも出ずに
         # ボタンだけが効かなくなる（CONTRIBUTING §1-5）。
         # tests/test_badge.py の test_setup_exposes_exactly_the_declared_bindings が、この表では
         # なく setup() の実挙動（何が公開されたか）を見て過不足を落とす。
-        # かつてはクラス定数 _BINDINGS がメソッド「名の文字列」を持ち getattr(self, ...) で
-        # 引いていたが、それだとメソッドを改名しても mypy も ruff も何も言わず、起動して
-        # AttributeError になるまで気づけなかった（#102）。束縛メソッドを直接持てば mypy が
-        # 未定義属性として落とす。クラス定数のままだと self が無いのでここ（setup 内）で組む。
+        # **メソッド「名の文字列」＋ getattr(self, ...) で引く形にしないこと。** それだと
+        # 改名しても mypy も ruff も何も言わず、起動して AttributeError になるまで気づけない。
+        # 束縛メソッドを直接持てば mypy が未定義属性として落とす。クラス定数だと self が
+        # 無いのでここ（setup 内）で組む。
         # 型で守れるのは**属性名の解決であって戻り値ではない** — get_state だけ dict を返し
         # 他は None を返すため、要素の型は Callable[..., Awaitable[Any]] まで緩めてある。
         bindings: tuple[tuple[str, Callable[..., Awaitable[Any]]], ...] = (
@@ -584,7 +581,7 @@ class CaptureSession:
 
         このセッションが持つ追跡情報（seen / _tracked）から消し、系譜側の後始末（page_root の
         メモと、どの生存ページからも参照されなくなった root のグループ状態の破棄）はレジストリの
-        release() へ任せる（root ページ自身が閉じても、ポップアップが残る間は保持される。#48）。
+        release() へ任せる（root ページ自身が閉じても、ポップアップが残る間は保持される）。
         """
         self.seen.pop(page, None)
         self._tracked.discard(page)
@@ -753,7 +750,6 @@ async def main(config: Config) -> None:
 def cli(run: Callable[[Coroutine[Any, Any, None]], None] = asyncio.run) -> int:
     """起動シーケンス（設定読み込み・起動ログ・多重起動抑止・監視の実行）。終了コードを返す。
 
-    `if __name__ == "__main__":` へ直書きしていた約 28 行をここへ括り出したもの（#50）。
     プロセスを落とすのは `__main__` の `sys.exit(cli())` 1 行だけにして、この関数は
     「何をどの順でやり、どの終了コードになるか」を返す純粋な手続きに保つ。こうしておくと、
     実ブラウザ無しでもロック取得・ログの順序・終了コードを回帰テストで押さえられる
@@ -772,7 +768,7 @@ def cli(run: Callable[[Coroutine[Any, Any, None]], None] = asyncio.run) -> int:
     #
     # 設定を読み切れないとき（保存先がどこにも書けない／数値項目が不正）は config が
     # ConfigFatalError を投げる。ライブラリ層はプロセスを落とさないので、通知と終了は
-    # 入口のここ 1 か所で決める（#49）。文面は例外に載っているものをそのまま出す。
+    # 入口のここ 1 か所で決める。文面は例外に載っているものをそのまま出す。
     try:
         config = load_config()
     except ConfigFatalError as e:

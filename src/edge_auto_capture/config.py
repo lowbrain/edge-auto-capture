@@ -4,7 +4,7 @@ Config データクラスと load_config を提供する。基盤ユーティリ
 Playwright には依存しないので、実 Edge 無しで設定読み込みの仕様を回帰テストできる。
 
 読み切れない設定は ConfigFatalError で返す（プロセスは落とさない）。終了の判断は入口
-（edge_auto_capture.cli）の 1 か所に集める（#49）。
+（edge_auto_capture.cli）の 1 か所に集める。
 """
 
 import configparser
@@ -20,19 +20,18 @@ CONFIG_PATH = BASE_DIR / "config.ini"
 
 # 同梱する既定 config.ini（package-data）のファイル名。badge.js と同じ仕組みで
 # パッケージに入れて配る（pyproject の [tool.setuptools.package-data]・build.ps1 の
-# --add-data）。中身をここへ文字列で持たない: かつては DEFAULT_CONFIG_TEXT という
-# 約 60 行のリテラルとルートの config.ini が同内容で並び、バイト一致テストで
-# drift を押さえ込んでいた（#101 で出所を .ini 側 1 つにした）。
+# --add-data）。**中身をここへ文字列で持たないこと**（.ini と同内容のリテラルが並ぶと
+# 二重管理になり、設定項目を足すたびに 2 箇所を直すことになる）。出所は .ini 側 1 つ。
 DEFAULT_CONFIG_NAME = "default_config.ini"
 
 
 class ConfigFatalError(Exception):
-    """設定を読み切れず、起動を続けられないときに送出する（#49）。
+    """設定を読み切れず、起動を続けられないときに送出する。
 
-    ライブラリ層（この config モジュール）はプロセスを落とさない。以前は notify_fatal →
-    sys.exit(1) をここで直接呼んでいたため、「設定を返す」はずの load_config が失敗時には
-    返らずプロセスを終わらせ、GUI 設定画面・設定検証コマンド・テストの別経路から再利用
-    できなかった（テストも「どう失敗したか」ではなく「落ちたこと」しか見られなかった）。
+    **ライブラリ層（この config モジュール）はプロセスを落とさない。** ここで notify_fatal →
+    sys.exit(1) を直接呼ぶと、「設定を返す」はずの load_config が失敗時には返らずプロセスを
+    終わらせ、GUI 設定画面・設定検証コマンド・テストの別経路から再利用できなくなる
+    （テストも「どう失敗したか」ではなく「落ちたこと」しか見られなくなる）。
 
     メッセージには利用者向けのダイアログ文面をそのまま載せる。通知（notify_fatal）と終了
     コードの決定は入口（edge_auto_capture.cli）の 1 か所に集める。
@@ -92,9 +91,8 @@ class Config:
         """eval_timeout を秒で返す（asyncio.wait_for / try_eval に渡す単位）。
 
         config.ini の単位はミリ秒（利用者に分かりやすい整数で書ける）、コード内の利用は秒
-        （asyncio の単位）。この変換点をここ 1 か所に定める（#56）。以前は capture.py の
-        _capture と _save_text が `config.eval_timeout / 1000` を別々に計算していて、
-        片方だけ直る形の事故を招く並びだった。
+        （asyncio の単位）。**この変換点はここ 1 か所に定める。** 呼び出し側で
+        `config.eval_timeout / 1000` を各々計算すると、片方だけ直る形の事故を招く。
         """
         return self.eval_timeout / 1000
 
@@ -259,7 +257,7 @@ def _build_config(sec: configparser.SectionProxy, defaults: Config) -> Config:
     skips = _csv_tuple(sec, "skip_urls")
 
     # 撮る URL を明示的に絞るホワイトリスト（指定時は他を全スキップ）。
-    # 空なら無効（従来どおり skip_urls だけで判定）。
+    # 空なら無効（skip_urls だけで判定）。
     allows = _csv_tuple(sec, "allow_urls")
 
     # 撮影中だけ隠すセレクタ。
@@ -297,7 +295,7 @@ def _resolve_output_dir(config: Config) -> Config:
     _build_config（純粋な値組み立て）から分離した副作用側。組み立て済みの Config を
     受け取り、以下を行って output_dir 差し替え済みの Config を返す:
       - 書き込み可能なフォルダへの解決と %LOCALAPPDATA% 等への退避。
-        どこにも書けなければ ConfigFatalError（通知と終了は入口が決める。#49）。
+        どこにも書けなければ ConfigFatalError（通知と終了は入口が決める）。
       - 起動 1 回分のセッションフォルダの挿入。
       - ログ出力先をその保存先へ切り替え（set_log_dir）。
       - 退避が起きた場合の通知。
@@ -344,10 +342,9 @@ def _config_from_section(sec: configparser.SectionProxy, defaults: Config) -> Co
     """[capture] セクションから、保存先まで確定した Config を作る。
 
     値の組み立て（_build_config・純粋）と保存先の解決（_resolve_output_dir・副作用）は
-    意図的に分けてあるが、使うときは必ずこの順で 2 段を揃える。以前は 3 経路
-    （通常読み込み・破損からの復旧・既定テキストからの起動）がそれぞれ同じ 2 段重ねを
-    書いていたため、間に処理が増えたときの直し漏れが 3 箇所ぶん起こりえた。組み合わせを
-    ここへ 1 本化して、直す場所を 1 つにする。
+    意図的に分けてあるが、使うときは必ずこの順で 2 段を揃える。**各呼び出し元
+    （通常読み込み・破損からの復旧・既定テキストからの起動）で 2 段重ねを書かないこと。**
+    間に処理が増えたときの直し漏れが経路の数だけ起こる。組み合わせはここ 1 本に閉じる。
     """
     return _resolve_output_dir(_build_config(sec, defaults))
 
@@ -431,7 +428,7 @@ def load_config() -> Config:
       - 数値項目の値だけが不正（例: settle_delay =／範囲外）→ ファイル自体は使えるので
         勝手に上書きせず、直し方を伝えて終了する（利用者の編集内容を失わせない）。
         「伝えて終了」の実体は ConfigFatalError の送出で、通知（notify_fatal）と終了コードは
-        入口（edge_auto_capture.cli）が決める（#49）。保存先がどこにも書けないときも同じ。
+        入口（edge_auto_capture.cli）が決める。保存先がどこにも書けないときも同じ。
       - output_dir の値が空 → 既定値（output）へフォールバックする
         （空だと Path('.') でカレントへ保存してしまう事故を防ぐ）。
       - 確定した output_dir の直下へ、起動時刻のセッションフォルダを 1 段挟む（
@@ -440,7 +437,7 @@ def load_config() -> Config:
       - edge_path / chrome_path が空 → 自動検出（空が正常値）。値があれば
         起動する各ブラウザの実行ファイルとしてそのパスを使う。
       - target_selector が空 → 一部抜き出しをスキップ（空が正常値）。
-      - profile_dir が空 → 毎回まっさらな使い捨てプロファイル（既定・従来どおり）。
+      - profile_dir が空 → 毎回まっさらな使い捨てプロファイル（既定）。
         値があれば、そのフォルダを再利用（相対パスは基準フォルダ基準に固定）。
       - browser が空 → 自動選択（Edge→Chrome）。edge/chrome 以外の値 → 終了（ValueError）。
     """
