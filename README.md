@@ -105,7 +105,7 @@ edge-auto-capture/
 │     ├─ infra.py         基盤ユーティリティ（パス・ログ・致命エラー通知・一時プロファイル掃除）
 │     ├─ lineage.py       タブ系譜（lineage）の識別・保存先規約と解決レジストリ
 │     ├─ browser.py       Edge/Chrome の起動候補と起動オプションの組み立て
-│     ├─ badge.py         操作バーのページ側JS組み立て（表示文言→$CONFIG／バインディング名）
+│     ├─ badge.py         操作バーのページ側JS組み立て（表示文言・バインディング名を設定JSONへ）
 │     ├─ badge.js         操作バーのページ側JS本体（実ファイル・package-data）
 │     ├─ default_config.ini  既定の設定テンプレート（実ファイル・package-data）
 │     └─ downloads.py     ダウンロードの保存先解決とファイル退避
@@ -126,8 +126,8 @@ edge-auto-capture/
 既定の設定テンプレートは `src/edge_auto_capture/default_config.ini` に 1 つだけ置き、
 `badge.js` と同じ package-data として配る。`config.py` が自己修復（`config.ini` の欠落・
 破損時）に書き出す原本もこれで、`build.ps1` が配布フォルダへ置く `config.ini` もこれの写し。
-以前は同じ内容が `config.py` の文字列リテラルとルートの `config.ini` に二重にあり、
-バイト一致テストで drift を押さえ込んでいた（#101 で解消）。
+**中身を `config.py` の文字列リテラルとして持たないこと**（二重管理になり、設定項目を
+足すたびに 2 箇所を直すことになる）。
 
 ## 開発時の実行
 
@@ -190,9 +190,10 @@ python -m edge_auto_capture
 - **「微妙な仕様」の固定** — 保存ステップの集約（`_step`）、ページ側 JS のハング保護（`try_eval`）、
   撮影キューの合流、書き込み先の退避（`resolve_writable_dir`）、多重起動抑止、
   操作バー以外からの呼び出しを弾く合言葉(token)照合
-- **言語境界・パッケージ境界の一致** — `badge.py` の `BIND_*` と `badge.js` の `BINDING_NAMES`、
-  `badge.js` が package-data として宣言・同梱されていること、`USAGE.txt` の Shift-JIS 往復一致。
-  **どれも壊れても他の 3 点セットが落ちない**ので、テストだけが守っている（#67 / #68 / #69 / #81）
+- **言語境界・パッケージ境界の一致** — バインディング名の出所が `badge.py` の `BIND_*` 1 箇所で
+  あること（`badge.js` 側に名前のリテラルが無いこと）、`badge.js` と `default_config.ini` が
+  package-data として宣言・同梱されていること、`USAGE.txt` の Shift-JIS 往復一致。
+  **どれも壊れても他の 3 点セットが落ちない**ので、テストだけが守っている
 - **起動シーケンスと入口** — `cli()` の起動ログの順序・終了コード
 
 **テストファイルはソース側のモジュール構成に合わせてある**（どこに足すか迷わないように）。
@@ -206,8 +207,9 @@ SPA検知の落ち着き判定はページ側（`badge.js`）へ移したため�
 SPA検知の監視（本文を変えると `__eac_spa_changed` が発火する一連）が例外なく動くかを確認する。
 **`badge.js` を守るのはこれだけで、pytest では守れない。**
 
-**変更時に踏みやすい落とし穴（`$CONFIG` 置換・バインディング名の二重管理・Shift-JIS・
-新モジュール追加時の同時更新など）は [CONTRIBUTING.md](CONTRIBUTING.md) §1 にまとめてある。**
+**変更時に踏みやすい落とし穴（知らないと無言で壊す言語境界・文字コード・バージョン境界）は
+[CONTRIBUTING.md](CONTRIBUTING.md) §1 にまとめてある。触る前にそちらを読むこと。**
+一覧はここへ写さない（根治して消えた項目を警告し続ける状態になる）。
 
 ## 配布用 exe のビルド
 
