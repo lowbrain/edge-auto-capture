@@ -193,30 +193,42 @@ PEP 585 の `dict[...]` / `set[...]` / `tuple[...]` も PEP 604 の `X | Y` も*
 入れ替えたときと、「わざと壊して FAIL することを確かめる」検証**で、後者はこのリポジトリで
 実際にやる作業なので当たる。
 
-厄介なのは置き場所で、この機の `.venv` は Apple の Command Line Tools 同梱 python3 を
-土台にしており、`sys.pycache_prefix` が設定されている。**`.pyc` はリポジトリ内ではなく
-`~/Library/Caches/com.apple.python/<リポジトリの絶対パス>/` に置かれる**ため、
-`find . -name __pycache__ -delete` では消えない（そもそもリポジトリ内に作られない）。
-
-自分の環境が該当するかは次で分かる（空文字なら無関係）:
+厄介なのは置き場所で、**`.pyc` がどこに置かれるかは走らせる python 次第**。
+`sys.pycache_prefix` が未設定ならリポジトリ内の `__pycache__/` に、設定されていれば
+その配下（ソースの絶対パスを写した木）に置かれる。`.venv` を作り直すと土台の python が
+替わって置き場所も替わるので、**特定の場所を覚えず、毎回この 1 行に訊く**:
 
 ```bash
 python -c "import sys; print(sys.pycache_prefix)"
 ```
 
-**対処は「走らせる前にリポジトリぶんのキャッシュを消す」。**
+**対処は「走らせる前にリポジトリぶんのキャッシュを消す」。** 両方の環境で効く形はこれ:
 
 ```bash
-rm -rf ~/Library/Caches/com.apple.python"$PWD" && pytest
+prefix=$(python -c "import sys; print(sys.pycache_prefix or '')")
+if [ -n "$prefix" ]; then
+  rm -rf "$prefix$PWD"          # 例: Apple の Command Line Tools 同梱 python3
+else
+  find . -path ./.venv -prune -o -name __pycache__ -type d -exec rm -rf {} +
+fi
+pytest
 ```
 
-以下は**効かない**ので注意（いずれも実測で確認済み）:
+**`prefix` を空にしたまま `rm -rf "$prefix$PWD"` を走らせないこと**（リポジトリごと消える）。
+上の `if` はそれを避けるためにある。分岐を削って一行にしない。
+
+**片方の消し方は他方に効かず、しかも黙って成功する。** `sys.pycache_prefix` が設定されている
+環境ではリポジトリ内に `__pycache__` がそもそも作られないので `find` は空振りし、未設定の
+環境では `rm -rf ~/Library/Caches/...` が存在しないパスを消して空振りする。
+どちらもエラーにならないので、**「消したつもり」で偽の緑を踏み直せる。**
+
+以下は**どちらの環境でも効かない**ので注意（いずれも実測で確認済み）:
 
 | やりがちなこと | 結果 |
 |---|---|
-| `find . -name __pycache__ -delete` | **無効**。リポジトリ内に `__pycache__` は作られない |
+| `find . -name __pycache__ -delete` | **無効**。`-delete` は空でないディレクトリを消せず `Directory not empty` で素通りする。`-exec rm -rf {} +` を使う |
 | 途中から `python -B` に切り替える | **無効**。`-B` は「書かない」だけで、既にあるキャッシュは読む |
-| `PYTHONPYCACHEPREFIX=` （空）を渡す | **無効**。空は未設定扱いになり Apple の既定が残る |
+| `PYTHONPYCACHEPREFIX=` （空）を渡す | **無効**。空は未設定扱いになり、その python の既定が残る |
 | 最初からずっと `python -B` | 有効。ただしキャッシュが空の状態から徹底する必要がある |
 
 ---
